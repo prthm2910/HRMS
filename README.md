@@ -47,9 +47,6 @@ This system handles complex HR workflows including Leave Management, Organizatio
 
 ```mermaid
 erDiagram
-    %% ---------------------------------------------------------
-    %%  IDENTITY & ORGANIZATION MODULES
-    %% ---------------------------------------------------------
     USERS {
         string username
         string email
@@ -70,40 +67,32 @@ erDiagram
         decimal salary
     }
 
-    %% Relationships
-    USERS ||--|| EMPLOYEES : "has profile"
-    DEPARTMENTS ||--| EMPLOYEES : "contains"
-    EMPLOYEES ||--o EMPLOYEES : "manages (reports to)"
+    USERS ||--|| EMPLOYEES : has_profile
+    DEPARTMENTS ||--|{ EMPLOYEES : contains
+    EMPLOYEES ||--o{ EMPLOYEES : manages
 
-    %% ---------------------------------------------------------
-    %%  LEAVE MANAGEMENT MODULE
-    %% ---------------------------------------------------------
     LEAVE_REQUESTS {
-        enum leave_type
+        string leave_type
         date start_date
         date end_date
         string reason
-        enum status
+        string status
         string rejection_reason
     }
 
     LEAVE_BALANCES {
-        enum leave_type
+        string leave_type
         int total_allocated
         int used_leaves
         int remaining_leaves
     }
 
-    %% Relationships
-    EMPLOYEES ||--o LEAVE_REQUESTS : "applies for"
-    EMPLOYEES ||--o LEAVE_REQUESTS : "approves (action_by)"
-    EMPLOYEES ||--o LEAVE_BALANCES : "has quota"
+    EMPLOYEES ||--o{ LEAVE_REQUESTS : applies_for
+    EMPLOYEES ||--o{ LEAVE_REQUESTS : approves
+    EMPLOYEES ||--o{ LEAVE_BALANCES : has_balance
 
-    %% ---------------------------------------------------------
-    %%  AUDIT LOGGING (Cross-Cutting)
-    %% ---------------------------------------------------------
     AUDIT_LOGS {
-        enum action
+        string action
         string table_name
         string record_id
         json changes
@@ -111,11 +100,10 @@ erDiagram
         datetime timestamp
     }
 
-    %% Loose Relationships (Dotted Lines)
-    USERS ||--o AUDIT_LOGS : "performed action"
-    AUDIT_LOGS ..> USERS : "refers to target"
-    AUDIT_LOGS ..> EMPLOYEES : "refers to target"
-    AUDIT_LOGS ..> LEAVE_REQUESTS : "refers to target"
+    USERS ||--o{ AUDIT_LOGS : performs
+    AUDIT_LOGS }o--|| USERS : targets_user
+    AUDIT_LOGS }o--|| EMPLOYEES : targets_employee
+    AUDIT_LOGS }o--|| LEAVE_REQUESTS : targets_leave
 ```
 
 ---
