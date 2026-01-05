@@ -43,6 +43,83 @@ This system handles complex HR workflows including Leave Management, Organizatio
 
 ---
 
+## 🖼️ ER Diagram
+
+```
+erDiagram
+    %% ---------------------------------------------------------
+    %%  IDENTITY & ORGANIZATION MODULES
+    %% ---------------------------------------------------------
+    USERS {
+        string username
+        string email
+        string phone_number
+        text bio
+    }
+
+    DEPARTMENTS {
+        string name
+        text description
+    }
+
+    EMPLOYEES {
+        string employee_id
+        string designation
+        string employment_type
+        date date_of_joining
+        decimal salary
+    }
+
+    %% Relationships
+    USERS ||--|| EMPLOYEES : "has profile"
+    DEPARTMENTS ||--|{ EMPLOYEES : "contains"
+    EMPLOYEES ||--o{ EMPLOYEES : "manages (reports to)"
+
+    %% ---------------------------------------------------------
+    %%  LEAVE MANAGEMENT MODULE
+    %% ---------------------------------------------------------
+    LEAVE_REQUESTS {
+        enum leave_type
+        date start_date
+        date end_date
+        string reason
+        enum status
+        string rejection_reason
+    }
+
+    LEAVE_BALANCES {
+        enum leave_type
+        int total_allocated
+        int used_leaves
+        int remaining_leaves
+    }
+
+    %% Relationships
+    EMPLOYEES ||--o{ LEAVE_REQUESTS : "applies for"
+    EMPLOYEES ||--o{ LEAVE_REQUESTS : "approves (action_by)"
+    EMPLOYEES ||--o{ LEAVE_BALANCES : "has quota"
+
+    %% ---------------------------------------------------------
+    %%  AUDIT LOGGING (Cross-Cutting)
+    %% ---------------------------------------------------------
+    AUDIT_LOGS {
+        enum action
+        string table_name
+        string record_id
+        json changes
+        string path
+        datetime timestamp
+    }
+
+    %% Loose Relationships (Dotted Lines)
+    USERS ||--o{ AUDIT_LOGS : "performed action"
+    AUDIT_LOGS ..> USERS : "refers to target"
+    AUDIT_LOGS ..> EMPLOYEES : "refers to target"
+    AUDIT_LOGS ..> LEAVE_REQUESTS : "refers to target"
+```
+
+---
+
 ## 📂 Project Structure
 
 ```text
