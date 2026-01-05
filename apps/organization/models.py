@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from users.models import BaseTemplateModel
 
 class Department(BaseTemplateModel):
@@ -89,3 +90,14 @@ class Employee(BaseTemplateModel):
                     break
         
         super().save(*args, **kwargs)
+
+    def clean(self):
+    # 1. Prevent reporting to yourself
+        if self.manager == self:
+            raise ValidationError("You cannot report to yourself.")
+        
+        # 2. Prevent simple cycles (A -> B -> A)
+        # Note: For deep cycles (A->B->C->A), you need more complex logic, 
+        # but strictly checking immediate parent is the bare minimum.
+        if self.manager and self.manager.manager == self:
+            raise ValidationError("Circular reporting detected.")    
