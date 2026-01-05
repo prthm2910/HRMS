@@ -118,13 +118,10 @@ hrms_project/
 ├── requirements.txt        # Dependencies
 ├── hrms/                   # ⚙️ Configuration Package (Settings, WSGI, ASGI)
 ├── apps/                   # 📦 Business Logic (Domain Apps)
-│   ├── audit/              # Audit Logs & Middleware
-│   ├── leaves/             # Leave Requests & Balances
-│   ├── organization/       # Employees & Departments
-│   └── users/              # Authentication & User Models
-├── media/                  # User Uploads
-├── static/                 # Development Static Files
-└── staticfiles/            # Production Static Assets (Collected)
+    ├── audit/              # Audit Logs & Middleware
+    ├── leaves/             # Leave Requests & Balances
+    ├── organization/       # Employees & Departments
+    └── users/              # Authentication & User Models
 ```
 
 ---
