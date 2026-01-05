@@ -117,7 +117,7 @@ hrms_project/
 ├── manage.py               # Django Task Runner
 ├── requirements.txt        # Dependencies
 ├── hrms/                   # ⚙️ Configuration Package (Settings, WSGI, ASGI)
-├── apps/                   # 📦 Business Logic (Domain Apps)
+└── apps/                   # 📦 Business Logic (Domain Apps)
     ├── audit/              # Audit Logs & Middleware
     ├── leaves/             # Leave Requests & Balances
     ├── organization/       # Employees & Departments
