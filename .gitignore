@@ -1,0 +1,21 @@
+# Bytecode
+**/__pycache__/
+**/*.pyc
+**/*$py.class
+
+# Env/Secrets
+.env
+
+# Django specific
+media/
+
+# Ignore migration files but keep the python module structure
+**/migrations/*.py
+!**/migrations/__init__.py
+
+# IDE/Logs
+.vscode/
+
+# Redundant files
+test.py
+file_struct.txt
