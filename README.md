@@ -65,6 +65,7 @@ erDiagram
         string employment_type
         date date_of_joining
         decimal salary
+        uuid manager_id
     }
 
     USERS ||--|| EMPLOYEES : has_profile
