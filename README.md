@@ -43,7 +43,7 @@ This system handles complex HR workflows including Leave Management, Organizatio
 
 ---
 
-## 🖼️ ER Diagram
+## 🧩 ER Diagram
 
 ```mermaid
 erDiagram
