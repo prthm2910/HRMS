@@ -1,85 +1,130 @@
-### ---
+# ⚙️ HRMS Configuration Package
 
-**📄 hrms/README.md (Configuration Documentation)**
+This directory contains the **core configuration layer** of the HRMS Django project.  
+It defines global settings, environment configuration, middleware orchestration, and URL routing.
 
-Markdown
+This package is intentionally kept **thin and declarative**, separating configuration concerns from domain business logic (`apps/`).
 
-\# ⚙️ HRMS Configuration Package
+---
 
-This directory contains the core configuration files, settings, and entry points for the HRMS Django project.
+## 📂 Key Files
 
-\#\# 📂 Key Files
+| File | Purpose |
+| :--- | :--- |
+| `settings.py` | Primary configuration file. Manages database connections, DRF, authentication, middleware, and installed apps. |
+| `urls.py` | Global URL router. Dispatches requests to domain apps (`users`, `organization`, `leaves`, etc.). |
+| `wsgi.py` | WSGI entry point for synchronous production servers (e.g., Gunicorn). |
+| `asgi.py` | ASGI entry point enabling async features (WebSockets, async views). |
 
-| File | Description |  
-| :--- | :--- |  
-| **\*\*\`settings.py\`\*\*** | Main configuration file. Handles DB connections, DRF settings, and installed apps. |  
-| **\*\*\`urls.py\`\*\*** | Global URL router. Dispatches requests to specific apps (\`users\`, \`leaves\`, etc.). |  
-| **\*\*\`wsgi.py\`\*\*** | WSGI entry point for synchronous production servers (e.g., Gunicorn). |  
-| **\*\*\`asgi.py\`\*\*** | ASGI entry point for asynchronous capabilities. |
+---
 
-\---
+## 🔧 Environment Variables
 
-\#\# 🔧 Environment Variables
+The project uses **`django-environ`** to externalize secrets and environment-specific configuration.
 
-The \`settings.py\` file uses \`django-environ\` to load secrets. Ensure your \`.env\` file (located in the project root) contains the following keys:
+All environment variables are loaded from a `.env` file located at the **project root**.
 
-\#\#\# **\*\*Required\*\***  
-\`\`\`ini  
-\# Security  
-DEBUG=False  
-DJANGO\_SECRET\_KEY=your-secure-secret-key  
-ALLOWED\_HOSTS=api.yourdomain.com,127.0.0.1
+---
 
-\# Database (PostgreSQL)  
-DB\_NAME=<DB_NAME>  
-DB\_USER=<DB_USER>  
-DB\_PASSWORD=<DB_PASSWORD>
-DB\_HOST=<DB_HOST>
-DB\_PORT=<DB_PORT>
+### ✅ Required Variables
 
-\# Authentication  
-AUTH\_USER\_MODEL=<AUTH_USER_MODEL>
+```ini
+# Security
+DEBUG=False
+DJANGO_SECRET_KEY=your-secure-secret-key
+ALLOWED_HOSTS=api.yourdomain.com,127.0.0.1
 
-### **Optional / Production**
+# Database (PostgreSQL)
+DB_NAME=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_HOST=localhost
+DB_PORT=5432
 
+# Authentication
+AUTH_USER_MODEL=users.User
+```
 
-\# CORS (Frontend Access)  
-CORS\_ALLOWED\_ORIGINS\=\[https://your-frontend-domain.com\](https://your-frontend-domain.com)
+---
 
+### ⚙️ Optional / Production Variables
 
-## ---
+```ini
+# CORS (Frontend Access)
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
+```
 
-**🔌 Middleware Pipeline**
+These values should be customized per environment (local, staging, production).
 
-The settings.py defines a strict middleware order to ensure security and audit logging:
+---
 
-1. **CorsMiddleware**: Handles Cross-Origin requests (Must be first).  
-2. **SecurityMiddleware**: Enforces HTTPS/HSTS.  
-3. **SessionMiddleware**: Manages user sessions.  
-4. **AuthenticationMiddleware**: Attaches request.user.  
-5. **AuditMiddleware**: **(Custom)** Logs the request/response. *Note: Placed after Auth to capture the user.*
+## 🔌 Middleware Pipeline
 
-## ---
+The `settings.py` file defines a **strict middleware order** to ensure correctness, security, and full audit coverage.
 
-**🌐 URL Routing**
+Middleware execution order (top → bottom):
 
-The urls.py aggregates routes from all domain apps:
+1. **CorsMiddleware**  
+   Handles cross-origin requests (must be first).
 
-* /admin/ \-\> Django Admin  
-* /api/users/ \-\> User Authentication & Profile  
-* /api/leaves/ \-\> Leave Requests & Balances  
-* /api/org/ \-\> Departments & Employees  
-* /api/schema/ \-\> OpenAPI Documentation
+2. **SecurityMiddleware**  
+   Enforces HTTPS, HSTS, and security headers.
 
-## ---
+3. **SessionMiddleware**  
+   Manages session data.
 
-**🐍 Python Path Configuration**
+4. **AuthenticationMiddleware**  
+   Resolves and attaches `request.user`.
 
-In settings.py, we explicitly modify the system path to support the modular apps/ directory structure:
+5. **AuditMiddleware** *(Custom)*  
+   Captures request metadata and persists audit logs.  
+   > Placed after authentication to ensure the actor is correctly identified.
 
-Python
+---
 
-APPS\_DIR \= BASE\_DIR / 'apps'  
-sys.path.insert(0, str(APPS\_DIR))
+## 🌐 URL Routing
 
-This allows clean imports throughout the project (e.g., from leaves.models import ...) instead of from apps.leaves.models....
+The global `urls.py` aggregates routes from all domain apps and exposes shared infrastructure endpoints.
+
+| Path | Description |
+| :--- | :--- |
+| `/admin/` | Django Admin interface |
+| `/api/users/` | Authentication & user management |
+| `/api/leaves/` | Leave requests & balances |
+| `/api/org/` | Departments & employee hierarchy |
+| `/api/schema/` | OpenAPI schema & documentation |
+
+---
+
+## 🐍 Python Path Configuration
+
+To support a **clean, modular project layout**, the `apps/` directory is explicitly added to the Python path.
+
+This allows concise imports across the project.
+
+```python
+APPS_DIR = BASE_DIR / "apps"
+sys.path.insert(0, str(APPS_DIR))
+```
+
+### Resulting Benefit
+
+```python
+# Preferred
+from leaves.models import LeaveRequest
+
+# Avoided
+from apps.leaves.models import LeaveRequest
+```
+
+This improves readability and keeps domain logic decoupled from infrastructure concerns.
+
+---
+
+## ✅ Summary
+
+- Centralized configuration layer for the HRMS backend
+- Environment-driven settings with zero hardcoded secrets
+- Strict middleware ordering for security and audit integrity
+- Clean URL aggregation across domain apps
+- Explicit Python path control for scalable modular design
