@@ -45,7 +45,7 @@ This system handles complex HR workflows including Leave Management, Organizatio
 
 ## 🖼️ ER Diagram
 
-```
+```mermaid
 erDiagram
     %% ---------------------------------------------------------
     %%  IDENTITY & ORGANIZATION MODULES
@@ -72,8 +72,8 @@ erDiagram
 
     %% Relationships
     USERS ||--|| EMPLOYEES : "has profile"
-    DEPARTMENTS ||--|{ EMPLOYEES : "contains"
-    EMPLOYEES ||--o{ EMPLOYEES : "manages (reports to)"
+    DEPARTMENTS ||--| EMPLOYEES : "contains"
+    EMPLOYEES ||--o EMPLOYEES : "manages (reports to)"
 
     %% ---------------------------------------------------------
     %%  LEAVE MANAGEMENT MODULE
@@ -95,9 +95,9 @@ erDiagram
     }
 
     %% Relationships
-    EMPLOYEES ||--o{ LEAVE_REQUESTS : "applies for"
-    EMPLOYEES ||--o{ LEAVE_REQUESTS : "approves (action_by)"
-    EMPLOYEES ||--o{ LEAVE_BALANCES : "has quota"
+    EMPLOYEES ||--o LEAVE_REQUESTS : "applies for"
+    EMPLOYEES ||--o LEAVE_REQUESTS : "approves (action_by)"
+    EMPLOYEES ||--o LEAVE_BALANCES : "has quota"
 
     %% ---------------------------------------------------------
     %%  AUDIT LOGGING (Cross-Cutting)
@@ -112,7 +112,7 @@ erDiagram
     }
 
     %% Loose Relationships (Dotted Lines)
-    USERS ||--o{ AUDIT_LOGS : "performed action"
+    USERS ||--o AUDIT_LOGS : "performed action"
     AUDIT_LOGS ..> USERS : "refers to target"
     AUDIT_LOGS ..> EMPLOYEES : "refers to target"
     AUDIT_LOGS ..> LEAVE_REQUESTS : "refers to target"
