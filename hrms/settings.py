@@ -13,8 +13,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 import sys
 from pathlib import Path
-from datetime import timedelta
 import environ
+from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS
+from hrms.config.drf import DRF_REST_FRAMEWORK
+from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
+from hrms.config.local_apps import LOCAL_APPS
+from hrms.config.helper_functions import get_db_config, get_simple_jwt_config
 
 # ==============================================================================
 # 1. CORE CONFIGURATION
@@ -60,29 +64,10 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 # 3. INSTALLED APPS
 # ==============================================================================
 
-DJANGO_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-]
 
-THIRD_PARTY_APPS = [
-    'rest_framework',              # The API Toolkit
-    'rest_framework_simplejwt',    # For Auth Tokens
-    'corsheaders',                 # To allow Frontend access
-    'django_filters',              # Advanced filtering
-    'drf_spectacular',             # For API Schema and Docs
-]
+THIRD_PARTY_APPS = THIRD_PARTY_APPS
 
-LOCAL_APPS = [
-    'users.apps.UsersConfig',            # Custom user app
-    'audit.apps.AuditConfig',            # Audit logs app
-    'leaves.apps.LeavesConfig',
-    'organization.apps.OrganizationConfig',
-]
+LOCAL_APPS = LOCAL_APPS
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -91,36 +76,11 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # 4. MIDDLEWARE
 # ==============================================================================
 
-MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',                        # Must be first
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',      # Logs user in
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
-    # Custom Middleware
-    'audit.middleware.AuditMiddleware',                             # Captures user context for logs
-]
+MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE
 
 ROOT_URLCONF = 'hrms.urls'
 
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-            ],
-        },
-    },
-]
+TEMPLATES = DJANGO_CORE_TEMPLATES
 
 WSGI_APPLICATION = 'hrms.wsgi.application'
 
@@ -130,16 +90,7 @@ WSGI_APPLICATION = 'hrms.wsgi.application'
 # ==============================================================================
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT'),
-    }
-}
+DATABASES = get_db_config(env)
 
 # Custom User Model
 AUTH_USER_MODEL = env('AUTH_USER_MODEL')
@@ -150,12 +101,7 @@ AUTH_USER_MODEL = env('AUTH_USER_MODEL')
 # ==============================================================================
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
+AUTH_PASSWORD_VALIDATORS = DJANGO_AUTH_PASSWORD_VALIDATORS
 
 
 # ==============================================================================
@@ -190,33 +136,11 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # 9. API CONFIGURATION (DRF & JWT)
 # ==============================================================================
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ),
-}
+REST_FRAMEWORK = DRF_REST_FRAMEWORK
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),     # Recommended: shorter (e.g., 15 mins) in prod
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-}
+SIMPLE_JWT = get_simple_jwt_config(env)
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'HRMS API',
-    'DESCRIPTION': 'Human Resource Management System API with V1/V2 versioning',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-}
+SPECTACULAR_SETTINGS = SPECTACULAR_CONFIG
 
 
 # ==============================================================================
