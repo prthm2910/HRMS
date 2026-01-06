@@ -54,7 +54,7 @@ class EmployeeViewSetV2(viewsets.ModelViewSet):
 
         # 4. Ownership & Management Filter
         return Employee.objects.filter(
-            Q(id=employee_profile.id) | Q(manager=employee_profile),
+            Q(id=employee_profile.id),
             is_deleted=False
         ).distinct().order_by('-created_at')
 
