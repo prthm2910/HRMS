@@ -28,11 +28,11 @@ def get_simple_jwt_config(env):
     # We fetch the integer value (e.g., 30) or default to 30
     # Note: If using django-environ, env.int() handles casting automatically.
     # If using standard os.getenv, use: int(env('VAR', 30))
-    access_token_minutes = env.int('ACCESS_TOKEN_LIFETIME_MINUTES', default=30)
+    access_token_hours = env.int('ACCESS_TOKEN_LIFETIME_HOURS', default=10)
     refresh_token_days = env.int('REFRESH_TOKEN_LIFETIME_DAYS', default=1)
 
     return {
-        'ACCESS_TOKEN_LIFETIME': timedelta(minutes=access_token_minutes),
+        'ACCESS_TOKEN_LIFETIME': timedelta(hours=access_token_hours),
         'REFRESH_TOKEN_LIFETIME': timedelta(days=refresh_token_days),
         'ROTATE_REFRESH_TOKENS': True,
         'BLACKLIST_AFTER_ROTATION': True,
