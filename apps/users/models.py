@@ -22,7 +22,7 @@ class BaseTemplateModel(models.Model):
 class User(AbstractUser, BaseTemplateModel):
     # Making email unique and required (Django default is optional)
     email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    phone_number = models.CharField(max_length=10, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
 
     def __str__(self):
