@@ -64,7 +64,7 @@ class AuditLog(models.Model):
 
         # 1. Check Path specific signatures first
         if path.startswith('/admin/'):
-            return "Admin Panel 🛡️"
+            return "Admin Panel"
         
         if "Postman" in ua:
             return "Postman Client"
