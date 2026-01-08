@@ -1,5 +1,3 @@
-from django.utils.functional import SimpleLazyObject
-from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.authentication import JWTAuthentication 
 # ^^^ IF THIS FAILS: pip install djangorestframework-simplejwt
 # IF YOU USE STANDARD TOKENS: from rest_framework.authentication import TokenAuthentication
@@ -8,10 +6,24 @@ from .utils import set_audit_data, clear_audit_data
 
 class AuditMiddleware:
     def __init__(self, get_response):
+        """
+        Initialize the middleware.
+
+        :param get_response: Callable that returns the response from the parent middleware.
+        :type get_response: Callable[[Request], Response]
+        """
         self.get_response = get_response
 
     def __call__(self, request):
         # 1. Try to get the user from Standard Django Session
+        """
+        Intercept incoming requests, attempt to identify the user, capture request metadata, and persist audit logs.
+        
+        :param request: The incoming request object.
+        :type request: Request
+        :return: The response from the parent middleware.
+        :rtype: Response
+        """
         user = request.user
 
         # 2. IF user is not found, try to manually decode the API Token
