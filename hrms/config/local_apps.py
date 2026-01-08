@@ -3,4 +3,5 @@ LOCAL_APPS = [
     'audit.apps.AuditConfig',            # Audit logs app
     'leaves.apps.LeavesConfig',
     'organization.apps.OrganizationConfig',
+    'base.apps.BaseConfig',
 ]
