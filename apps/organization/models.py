@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from users.models import BaseTemplateModel
+from base.models import BaseTemplateModel
 
 class Department(BaseTemplateModel):
     name = models.CharField(max_length=100)
@@ -52,8 +52,8 @@ class Employee(BaseTemplateModel):
         choices=EMPLOYMENT_TYPE_CHOICES, 
         default='FULL_TIME'
     )
-
     date_of_joining = models.DateField()
+
     date_of_birth = models.DateField(null=True, blank=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
 

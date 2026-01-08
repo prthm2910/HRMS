@@ -1,7 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from users.models import BaseTemplateModel
+from datetime import timedelta  # <--- NEW IMPORT
+from base.models import BaseTemplateModel
 from organization.models import Employee
 
 class LeaveRequest(BaseTemplateModel):
@@ -38,7 +39,6 @@ class LeaveRequest(BaseTemplateModel):
     # 4. Approval Workflow
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     
-    # Who approved/rejected it? (Usually the Manager)
     action_by = models.ForeignKey(
         Employee, 
         on_delete=models.SET_NULL, 
@@ -48,15 +48,27 @@ class LeaveRequest(BaseTemplateModel):
     )
     rejection_reason = models.TextField(blank=True, null=True)
 
-    # inherited: id, created_at, updated_at...
-
     @property
     def duration(self):
-        """Calculates total days (inclusive)"""
-        if self.start_date and self.end_date:
-            delta = self.end_date - self.start_date
-            return delta.days + 1
-        return 0
+        """
+        Calculates total WORKING DAYS only (Excludes Sat/Sun).
+        """
+        if not self.start_date or not self.end_date:
+            return 0
+        
+        # 1. Total Calendar Days
+        total_days = (self.end_date - self.start_date).days + 1
+        
+        working_days = 0
+        for x in range(total_days):
+            current_day = self.start_date + timedelta(days=x)
+            
+            # 2. Check if it's a Weekend
+            # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+            if current_day.weekday() < 5: 
+                working_days += 1
+                
+        return working_days
 
     def clean(self):
         """Validation Logic"""
@@ -74,7 +86,6 @@ class LeaveRequest(BaseTemplateModel):
 class LeaveBalance(BaseTemplateModel):
     """
     Tracks how many leaves an employee has available.
-    One row per Employee per Leave Type.
     """
     employee = models.ForeignKey(
         Employee, 
@@ -83,12 +94,10 @@ class LeaveBalance(BaseTemplateModel):
     )
     leave_type = models.CharField(max_length=20, choices=LeaveRequest.LEAVE_TYPE_CHOICES)
     
-    # The Math
-    total_allocated = models.PositiveIntegerField(default=0, help_text="Total leaves given per year")
-    used_leaves = models.PositiveIntegerField(default=0, help_text="Approved leaves taken so far")
+    total_allocated = models.PositiveIntegerField(default=0)
+    used_leaves = models.PositiveIntegerField(default=0)
 
     class Meta:
-        # Ensures one employee can't have two rows for "Sick Leave"
         unique_together = ('employee', 'leave_type')
         verbose_name_plural = "Leave Balances"
         db_table = 'leave_balances' 
