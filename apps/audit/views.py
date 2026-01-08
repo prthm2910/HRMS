@@ -10,6 +10,6 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     We use ReadOnlyModelViewSet because logs should NEVER be edited or deleted via API.
     Only Admins (is_staff=True) can view these logs.
     """
-    queryset = AuditLog.objects.all().order_by('-timestamp')
+    queryset = AuditLog.objects.all().order_by('-created_at')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAdminUser]
