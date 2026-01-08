@@ -1,20 +1,41 @@
 from rest_framework import serializers
 from django.db.models import Q
 from datetime import date
+from apps.base.serializers import BaseTemplateSerializer
 from .models import LeaveRequest, LeaveBalance
+from organization.models import Employee
+from organization.serializers import EmployeeBasicSerializer, DepartmentBasicSerializer
 
-class LeaveBalanceSerializer(serializers.ModelSerializer):
+# Note: EmployeeBasicSerializer is now imported from organization.serializers
+# It already includes nested department field
+
+class LeaveBalanceSerializer(BaseTemplateSerializer):
     leave_type_display = serializers.CharField(source='get_leave_type_display', read_only=True)
     
     # FIX 1: Explicitly define IntegerField to resolve type hint warning
     remaining_leaves = serializers.IntegerField(read_only=True)
+    
+    # Nested employee for GET requests
+    employee = EmployeeBasicSerializer(read_only=True)
+    
+    # employee_id for POST/PUT/PATCH requests
+    employee_id = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(),
+        source='employee',
+        write_only=True,
+        required=True
+    )
 
     class Meta:
         model = LeaveBalance
-        fields = ['id', 'leave_type', 'leave_type_display', 'total_allocated', 'used_leaves', 'remaining_leaves']
+        fields = BaseTemplateSerializer.Meta.fields + [
+            'employee', 'employee_id',
+            'leave_type', 'leave_type_display', 
+            'total_allocated', 'used_leaves', 'remaining_leaves'
+        ]
 
 
-class LeaveRequestSerializer(serializers.ModelSerializer):
+class LeaveRequestSerializer(BaseTemplateSerializer):
     """
     Default Serializer for List and Create.
     Security: 'status' is Read-Only here so no one can create an 'APPROVED' leave directly.
@@ -22,18 +43,44 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     # FIX 2: Explicitly define IntegerField for duration
     duration_days = serializers.IntegerField(source='duration', read_only=True)
     
-    employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
+    # Nested employee for GET requests
+    employee = EmployeeBasicSerializer(read_only=True)
+    
+    # employee_id for POST/PUT/PATCH requests (optional since it's auto-set from request.user)
+    employee_id = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(),
+        source='employee',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    
+    # Nested serializer for action_by field to show employee details
+    action_by_details = EmployeeBasicSerializer(
+        source='action_by',
+        read_only=True
+    )
+    
+    # action_by_id for write operations (managers/admins)
+    action_by_id = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(),
+        source='action_by',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
     
     class Meta:
         model = LeaveRequest
-        fields = [
-            'id', 'employee', 'employee_name',
+        fields = BaseTemplateSerializer.Meta.fields + [
+            'employee', 'employee_id',
             'leave_type', 'start_date', 'end_date', 'reason',
-            'status', 'rejection_reason', 'action_by',
-            'duration_days', 'created_at'
+            'status', 'rejection_reason', 
+            'action_by_details', 'action_by_id',
+            'duration_days'
         ]
         # CRITICAL: 'status' is now Read-Only by default
-        read_only_fields = ['id', 'employee', 'action_by', 'created_at', 'status', 'rejection_reason']
+        read_only_fields = ['employee', 'action_by_details', 'status', 'rejection_reason']
 
     def validate(self, data):
         start = data.get('start_date')

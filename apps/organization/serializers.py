@@ -1,23 +1,50 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from apps.base.serializers import BaseTemplateSerializer
 from .models import Employee, Department
 
 User = get_user_model()
 
-class DepartmentSerializer(serializers.ModelSerializer):
+class DepartmentSerializer(BaseTemplateSerializer):
     class Meta:
         model = Department
-        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'is_active']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = BaseTemplateSerializer.Meta.fields + ['name', 'description']
 
-class EmployeeSerializer(serializers.ModelSerializer):
+class DepartmentBasicSerializer(BaseTemplateSerializer):
+    """
+    Lightweight serializer for displaying department info in nested contexts.
+    Used by: EmployeeSerializer, EmployeeBasicSerializer
+    """
+    class Meta:
+        model = Department
+        fields = ['id', 'name', 'description']
+        read_only_fields = fields  # All fields are read-only for nested display
+
+class EmployeeBasicSerializer(BaseTemplateSerializer):
+    """
+    Lightweight serializer for displaying basic employee info in nested contexts.
+    Used by: LeaveRequestSerializer, LeaveBalanceSerializer, EmployeeSerializer (for manager)
+    """
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    department = DepartmentBasicSerializer(read_only=True)
+    
+    class Meta:
+        model = Employee
+        fields = ['employee_id', 'first_name', 'last_name', 'designation', 'department']
+        read_only_fields = fields  # All fields are read-only for nested display
+
+
+class EmployeeSerializer(BaseTemplateSerializer):
     # --- READ ONLY (Output) ---
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     mobile_number = serializers.CharField(source='user.phone_number', read_only=True)
-    manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)
-    department_name = serializers.CharField(source='department.name', read_only=True)
+    
+    # Nested objects for GET requests
+    department = DepartmentBasicSerializer(read_only=True)
+    manager = EmployeeBasicSerializer(read_only=True)
 
     # --- WRITE ONLY (Input for User Creation) ---
     user_first_name = serializers.CharField(write_only=True, required=False)
@@ -44,8 +71,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = [
-            'id', 'employee_id', 'created_at', 'updated_at', 'is_active', 'is_deleted',
+        fields = BaseTemplateSerializer.Meta.fields + [
+            'employee_id',
             
             # User Write Fields
             'user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number',
@@ -53,16 +80,16 @@ class EmployeeSerializer(serializers.ModelSerializer):
             # User Read Fields
             'first_name', 'last_name', 'email', 'mobile_number',
             
-            # Relations
-            'department_id', 'department_name',
-            'manager_id', 'manager_name',
+            # Relations (Nested for GET, _id for POST/PUT/PATCH)
+            'department', 'department_id',
+            'manager', 'manager_id',
             
             # Job Details
             'designation', 'employment_type', 'salary',
             'date_of_joining', 'date_of_birth',
         ]
         # CRITICAL: employee_id is now strictly read-only
-        read_only_fields = ['id', 'employee_id', 'created_at', 'updated_at', 'is_active', 'is_deleted']
+        read_only_fields = ['employee_id']
 
     def create(self, validated_data):
         # Extract user data
@@ -88,6 +115,16 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         # Handle User updates
+        """
+        Updates an existing Employee record.
+
+        Handles updates to the user's first name, last name, email, password, and mobile number.
+
+        :param instance: The Employee object to be updated
+        :param validated_data: A dictionary containing the fields to be updated
+        :return: The updated Employee object
+        :rtype: Employee
+        """
         user_fields = ['user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number']
         
         if any(field in validated_data for field in user_fields):
