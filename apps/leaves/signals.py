@@ -4,7 +4,7 @@ from organization.models import Employee
 from .models import LeaveBalance, LeaveRequest
 from django.db.models import F
 
-# --- 1. Trigger on New Employee (This part was already correct) ---
+# --- 1. Auto-Create Balances for New Employees ---
 @receiver(post_save, sender=Employee)
 def create_leave_balances(sender, instance, created, **kwargs):
     if created:
@@ -25,17 +25,13 @@ def create_leave_balances(sender, instance, created, **kwargs):
                     used_leaves=0
                 )
             )
-        
-        # Bulk create is faster than looping .create()
         LeaveBalance.objects.bulk_create(balances)
 
-# --- 2. Fix for "Double Deduction" Bug ---
-
+# --- 2. Capture Previous Status (The Memory) ---
 @receiver(pre_save, sender=LeaveRequest)
 def capture_previous_status(sender, instance, **kwargs):
     """
-    Before saving, we check what the status currently is in the DB.
-    We store it in a temporary variable '_old_status'.
+    Before saving, store the old status to compare later.
     """
     if instance.pk:
         try:
@@ -46,35 +42,46 @@ def capture_previous_status(sender, instance, **kwargs):
     else:
         instance._old_status = None
 
+# --- 3. The Smart Ledger Logic (Deduct & Refund) ---
 @receiver(post_save, sender=LeaveRequest)
-def update_leave_balance_on_approval(sender, instance, created, **kwargs):
+def update_leave_balance_on_status_change(sender, instance, created, **kwargs):
     """
-    Only deduct balance if status TRANSITIONS from 'PENDING' -> 'APPROVED'.
+    Handles both DEDUCTION (when Approved) and REFUND (when Revoked).
     """
     if created:
         return
 
     # Get the old status we captured in pre_save
     old_status = getattr(instance, '_old_status', None)
+    new_status = instance.status
 
-    # CHECK: Is it Approved NOW? AND Was it NOT Approved BEFORE?
-    if instance.status == 'APPROVED' and old_status != 'APPROVED':
+    # If status hasn't changed, do nothing
+    if old_status == new_status:
+        return
+
+    # Calculate days
+    days_diff = instance.duration
+
+    try:
+        balance = LeaveBalance.objects.get(
+            employee=instance.employee, 
+            leave_type=instance.leave_type
+        )
         
-        days_to_deduct = instance.duration
-        
-        try:
-            balance = LeaveBalance.objects.get(
-                employee=instance.employee, 
-                leave_type=instance.leave_type
-            )
-            
-            # Atomic Update (Safe against race conditions)
-            balance.used_leaves = F('used_leaves') + days_to_deduct
+        # SCENARIO A: Granting Leave (Pending -> Approved)
+        # Action: INCREASE used_leaves (Deduct Balance)
+        if new_status == 'APPROVED' and old_status != 'APPROVED':
+            print(f"📉 Deducting {days_diff} days for {instance.employee}")
+            balance.used_leaves = F('used_leaves') + days_diff
+            balance.save()
+
+        # SCENARIO B: Revoking Leave (Approved -> Rejected / Cancelled)
+        # Action: DECREASE used_leaves (Refund Balance)
+        elif old_status == 'APPROVED' and new_status != 'APPROVED':
+            print(f"📈 Refunding {days_diff} days to {instance.employee}")
+            # We use F() to handle potential race conditions safely
+            balance.used_leaves = F('used_leaves') - days_diff
             balance.save()
             
-            # Refresh to show updated number in logs/print if needed
-            balance.refresh_from_db()
-            print(f"✅ Deducted {days_to_deduct} days. New Used: {balance.used_leaves}")
-
-        except LeaveBalance.DoesNotExist:
-            print(f"⚠️ CRITICAL: No Leave Balance found for {instance.employee.email}")
+    except LeaveBalance.DoesNotExist:
+        print(f"⚠️ CRITICAL: No Leave Balance found for {instance.employee}")
