@@ -14,6 +14,11 @@ class LeaveRequest(BaseTemplateModel):
         ('UNPAID', 'Loss of Pay (LWP)'),
     ]
 
+    HALF_DAY_PERIOD_CHOICES = [
+        ('FIRST_HALF', 'First Half'),
+        ('SECOND_HALF', 'Second Half'),
+    ]
+
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
@@ -32,6 +37,16 @@ class LeaveRequest(BaseTemplateModel):
     # 2. When
     start_date = models.DateField()
     end_date = models.DateField()
+    
+    # 2.1 Half-Day Support
+    is_half_day = models.BooleanField(default=False, help_text="Is this a half-day leave?")
+    half_day_period = models.CharField(
+        max_length=20, 
+        choices=HALF_DAY_PERIOD_CHOICES, 
+        blank=True, 
+        null=True,
+        help_text="Which half of the day (required if is_half_day=True)"
+    )
     
     # 3. Why
     reason = models.TextField(help_text="Reason for leave")
@@ -52,6 +67,7 @@ class LeaveRequest(BaseTemplateModel):
     def duration(self):
         """
         Calculates total WORKING DAYS only (Excludes Sat/Sun).
+        Returns integer for backward compatibility.
         """
         if not self.start_date or not self.end_date:
             return 0
@@ -70,10 +86,27 @@ class LeaveRequest(BaseTemplateModel):
                 
         return working_days
 
+    @property
+    def actual_duration(self):
+        """
+        Calculates actual leave duration considering half-days.
+        Returns decimal: 0.5 for half-day, working days for full-day.
+        """
+        if self.is_half_day:
+            return 0.5
+        return float(self.duration)
+
     def clean(self):
         """Validation Logic"""
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValidationError(_("End date cannot be before start date."))
+        
+        # Half-day validations
+        if self.is_half_day:
+            if self.start_date != self.end_date:
+                raise ValidationError(_("Half-day leave must have the same start and end date."))
+            if not self.half_day_period:
+                raise ValidationError(_("Half-day period (First Half/Second Half) is required for half-day leaves."))
 
     def __str__(self):
         return f"{self.employee} - {self.leave_type} ({self.status})"
@@ -94,8 +127,8 @@ class LeaveBalance(BaseTemplateModel):
     )
     leave_type = models.CharField(max_length=20, choices=LeaveRequest.LEAVE_TYPE_CHOICES)
     
-    total_allocated = models.PositiveIntegerField(default=0)
-    used_leaves = models.PositiveIntegerField(default=0)
+    total_allocated = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    used_leaves = models.DecimalField(max_digits=5, decimal_places=1, default=0)
 
     class Meta:
         unique_together = ('employee', 'leave_type')
