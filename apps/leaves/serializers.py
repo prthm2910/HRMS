@@ -43,6 +43,9 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     # FIX 2: Explicitly define IntegerField for duration
     duration_days = serializers.IntegerField(source='duration', read_only=True)
     
+    # Actual duration considering half-days (decimal)
+    actual_duration_days = serializers.FloatField(source='actual_duration', read_only=True)
+    
     # Nested employee for GET requests
     employee = EmployeeBasicSerializer(read_only=True)
     
@@ -70,6 +73,9 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         allow_null=True
     )
     
+    # Half-day fields
+    half_day_period_display = serializers.CharField(source='get_half_day_period_display', read_only=True)
+    
     class Meta:
         model = LeaveRequest
         fields = BaseTemplateSerializer.Meta.fields + [
@@ -77,7 +83,8 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             'leave_type', 'start_date', 'end_date', 'reason',
             'status', 'rejection_reason', 
             'action_by_details', 'action_by_id',
-            'duration_days'
+            'duration_days', 'actual_duration_days',
+            'is_half_day', 'half_day_period', 'half_day_period_display'
         ]
         # CRITICAL: 'status' is now Read-Only by default
         read_only_fields = ['employee', 'action_by_details', 'status', 'rejection_reason']
@@ -100,8 +107,37 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                     raise serializers.ValidationError({
                         "start_date": "You cannot apply for past or current dates. Please apply at least 1 day in advance."
                     })
+        
+        # 2. WEEKEND VALIDATION
+        if start and end:
+            from datetime import timedelta
+            total_days = (end - start).days + 1
+            for x in range(total_days):
+                current_day = start + timedelta(days=x)
+                # weekday(): 5=Saturday, 6=Sunday
+                if current_day.weekday() >= 5:
+                    raise serializers.ValidationError({
+                        "start_date": f"Cannot apply for leave on weekends. {current_day.strftime('%Y-%m-%d')} is a {current_day.strftime('%A')}."
+                    })
 
-        # 2. OVERLAP CHECK
+        # 3. HALF-DAY VALIDATIONS
+        is_half_day = data.get('is_half_day', False)
+        half_day_period = data.get('half_day_period')
+        
+        if is_half_day:
+            # Half-day must have same start and end date
+            if start and end and start != end:
+                raise serializers.ValidationError({
+                    "end_date": "Half-day leave must have the same start and end date."
+                })
+            
+            # Half-day period is required
+            if not half_day_period:
+                raise serializers.ValidationError({
+                    "half_day_period": "Please specify which half of the day (First Half or Second Half)."
+                })
+        
+        # 4. OVERLAP CHECK
         if start and end and employee:
             overlapping_requests = LeaveRequest.objects.filter(
                 employee=employee,
@@ -120,11 +156,25 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                         f"You already have a leave request for this period ({conflict.start_date} to {conflict.end_date})." 
                     )
 
-        # 3. Balance Check (Only on CREATE)
+        # 5. Balance Check (Only on CREATE)
         if request and request.method == 'POST' and employee:
             if start and end:
                 leave_type = data.get('leave_type')
-                days_requested = (end - start).days + 1
+                is_half_day = data.get('is_half_day', False)
+                
+                # Calculate days requested based on half-day or full-day
+                if is_half_day:
+                    days_requested = 0.5
+                else:
+                    # Use actual working days calculation
+                    from datetime import timedelta
+                    total_days = (end - start).days + 1
+                    working_days = 0
+                    for x in range(total_days):
+                        current_day = start + timedelta(days=x)
+                        if current_day.weekday() < 5:  # Exclude weekends
+                            working_days += 1
+                    days_requested = float(working_days)
                 
                 try:
                     balance_record = LeaveBalance.objects.get(
@@ -153,7 +203,7 @@ class LeaveUpdateSerializer(LeaveRequestSerializer):
     Explicitly blocks 'status' changes with a clear error message.
     """
     class Meta(LeaveRequestSerializer.Meta):
-        fields = ['start_date', 'end_date', 'reason', 'leave_type']
+        fields = ['start_date', 'end_date', 'reason', 'leave_type', 'is_half_day', 'half_day_period']
 
     def validate(self, data):
         # We look at the raw request data to see if 'status' was sent
