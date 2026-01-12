@@ -40,11 +40,8 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     Default Serializer for List and Create.
     Security: 'status' is Read-Only here so no one can create an 'APPROVED' leave directly.
     """
-    # FIX 2: Explicitly define IntegerField for duration
-    duration_days = serializers.IntegerField(source='duration', read_only=True)
-    
-    # Actual duration considering half-days (decimal)
-    actual_duration_days = serializers.FloatField(source='actual_duration', read_only=True)
+    # Duration in days (considers half-days: 0.5 for half-day, working days for full-day)
+    duration = serializers.FloatField(read_only=True)
     
     # Nested employee for GET requests
     employee = EmployeeBasicSerializer(read_only=True)
@@ -83,7 +80,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             'leave_type', 'start_date', 'end_date', 'reason',
             'status', 'rejection_reason', 
             'action_by_details', 'action_by_id',
-            'duration_days', 'actual_duration_days',
+            'duration',
             'is_half_day', 'half_day_period', 'half_day_period_display'
         ]
         # CRITICAL: 'status' is now Read-Only by default
