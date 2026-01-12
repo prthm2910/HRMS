@@ -76,7 +76,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # 4. MIDDLEWARE
 # ==============================================================================
 
-MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE
+MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE + ['apps.audit.middleware.AuditMiddleware']
 
 ROOT_URLCONF = 'hrms.urls'
 
