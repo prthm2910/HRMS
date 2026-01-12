@@ -12,8 +12,8 @@ from organization.serializers import EmployeeBasicSerializer, DepartmentBasicSer
 class LeaveBalanceSerializer(BaseTemplateSerializer):
     leave_type_display = serializers.CharField(source='get_leave_type_display', read_only=True)
     
-    # FIX 1: Explicitly define IntegerField to resolve type hint warning
-    remaining_leaves = serializers.IntegerField(read_only=True)
+    # Remaining leaves calculation (supports half-days: e.g., 9.5)
+    remaining_leaves = serializers.DecimalField(max_digits=5, decimal_places=1, read_only=True)
     
     # Nested employee for GET requests
     employee = EmployeeBasicSerializer(read_only=True)
