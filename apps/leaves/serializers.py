@@ -105,17 +105,18 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                         "start_date": "You cannot apply for past or current dates. Please apply at least 1 day in advance."
                     })
         
-        # 2. WEEKEND VALIDATION
-        if start and end:
-            from datetime import timedelta
-            total_days = (end - start).days + 1
-            for x in range(total_days):
-                current_day = start + timedelta(days=x)
-                # weekday(): 5=Saturday, 6=Sunday
-                if current_day.weekday() >= 5:
-                    raise serializers.ValidationError({
-                        "start_date": f"Cannot apply for leave on weekends. {current_day.strftime('%Y-%m-%d')} is a {current_day.strftime('%A')}."
-                    })
+        # 2. WEEKEND VALIDATION - Only reject if start or end date is on weekend
+        if start:
+            if start.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                raise serializers.ValidationError({
+                    "start_date": f"Start date cannot be on a weekend. {start.strftime('%Y-%m-%d')} is a {start.strftime('%A')}."
+                })
+        
+        if end:
+            if end.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                raise serializers.ValidationError({
+                    "end_date": f"End date cannot be on a weekend. {end.strftime('%Y-%m-%d')} is a {end.strftime('%A')}."
+                })
 
         # 3. HALF-DAY VALIDATIONS
         is_half_day = data.get('is_half_day', False)
