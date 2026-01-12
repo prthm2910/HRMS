@@ -33,18 +33,14 @@ def capture_previous_status(sender, instance, **kwargs):
     """
     Before saving, store the old status to compare later.
     """
-    print(f"🔍 PRE_SAVE signal fired for LeaveRequest ID: {instance.pk}")
     if instance.pk:
         try:
             old_record = LeaveRequest.objects.get(pk=instance.pk)
             instance._old_status = old_record.status
-            print(f"   Old status captured: {old_record.status}")
         except LeaveRequest.DoesNotExist:
             instance._old_status = None
-            print(f"   LeaveRequest not found in DB (shouldn't happen)")
     else:
         instance._old_status = None
-        print(f"   New LeaveRequest being created (no old status)")
 
 # --- 3. The Smart Ledger Logic (Deduct & Refund) ---
 @receiver(post_save, sender=LeaveRequest)
@@ -52,21 +48,15 @@ def update_leave_balance_on_status_change(sender, instance, created, **kwargs):
     """
     Handles both DEDUCTION (when Approved) and REFUND (when Revoked).
     """
-    print(f"🔍 POST_SAVE signal fired for LeaveRequest ID: {instance.pk}, Created: {created}")
-    
     if created:
-        print(f"   Skipping: New leave request created")
         return
 
     # Get the old status we captured in pre_save
     old_status = getattr(instance, '_old_status', None)
     new_status = instance.status
-    
-    print(f"   Old status: {old_status}, New status: {new_status}")
 
     # If status hasn't changed, do nothing
     if old_status == new_status:
-        print(f"   Skipping: Status hasn't changed")
         return
 
     # Calculate days
