@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
+from base.utils import get_employee_profile
 from organization.models import Employee, Department
 from organization.serializers import EmployeeSerializer, DepartmentSerializer
 
@@ -41,7 +42,7 @@ class EmployeeViewSetV1(viewsets.ModelViewSet):
             return Employee.objects.all().order_by('-created_at')
         
         # 2. Get profile for regular users
-        employee_profile = getattr(user, 'employee_profile', None)
+        employee_profile = get_employee_profile(user)
         
         # 3. If no profile and not Admin, return nothing
         if not employee_profile:
