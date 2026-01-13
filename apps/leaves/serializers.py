@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from datetime import date
 from apps.base.serializers import BaseTemplateSerializer
+from base.utils import calculate_working_days, is_weekend, get_employee_profile
 from .models import LeaveRequest, LeaveBalance
 from organization.models import Employee
 from organization.serializers import EmployeeBasicSerializer, DepartmentBasicSerializer
@@ -61,15 +62,6 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         read_only=True
     )
     
-    # action_by_id for write operations (managers/admins)
-    action_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=Employee.objects.all(),
-        source='action_by',
-        write_only=True,
-        required=False,
-        allow_null=True
-    )
-    
     # Half-day fields
     half_day_period_display = serializers.CharField(source='get_half_day_period_display', read_only=True)
     
@@ -79,7 +71,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             'employee', 'employee_id',
             'leave_type', 'start_date', 'end_date', 'reason',
             'status', 'rejection_reason', 
-            'action_by_details', 'action_by_id',
+            'action_by_details',
             'duration',
             'is_half_day', 'half_day_period', 'half_day_period_display'
         ]
@@ -92,31 +84,41 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         
         request = self.context.get('request')
         user = request.user if request else None
-        employee = getattr(user, 'employee_profile', None)
+        employee = get_employee_profile(user)
 
         # 1. Date Order & Future Check
         if start and end:
             if start > end:
-                raise serializers.ValidationError({"end_date": "End date cannot be before start date."})
+                raise serializers.ValidationError({
+                    "end_date": "End date cannot be before start date."
+                })
             
-            if request and request.method == 'POST':
-                if start <= date.today():
+            # Allow same-day half-day leaves for emergencies
+            is_half_day = data.get('is_half_day', False)
+            
+            if not is_half_day:
+                # Full-day leaves must be in the future
+                if start < date.today():
                     raise serializers.ValidationError({
-                        "start_date": "You cannot apply for past or current dates. Please apply at least 1 day in advance."
+                        "start_date": "Full-day leave requests must be for future dates. For same-day emergencies, please use half-day leave."
+                    })
+            else:
+                # Half-day leaves can be on the same day, but not in the past
+                if start < date.today():
+                    raise serializers.ValidationError({
+                        "start_date": "Half-day leave cannot be applied for past dates."
                     })
         
         # 2. WEEKEND VALIDATION - Only reject if start or end date is on weekend
-        if start:
-            if start.weekday() >= 5:  # 5=Saturday, 6=Sunday
-                raise serializers.ValidationError({
-                    "start_date": f"Start date cannot be on a weekend. {start.strftime('%Y-%m-%d')} is a {start.strftime('%A')}."
-                })
+        if start and is_weekend(start):
+            raise serializers.ValidationError({
+                "start_date": f"Start date cannot be on a weekend. {start.strftime('%Y-%m-%d')} is a {start.strftime('%A')}."
+            })
         
-        if end:
-            if end.weekday() >= 5:  # 5=Saturday, 6=Sunday
-                raise serializers.ValidationError({
-                    "end_date": f"End date cannot be on a weekend. {end.strftime('%Y-%m-%d')} is a {end.strftime('%A')}."
-                })
+        if end and is_weekend(end):
+            raise serializers.ValidationError({
+                "end_date": f"End date cannot be on a weekend. {end.strftime('%Y-%m-%d')} is a {end.strftime('%A')}."
+            })
 
         # 3. HALF-DAY VALIDATIONS
         is_half_day = data.get('is_half_day', False)
@@ -164,15 +166,8 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                 if is_half_day:
                     days_requested = 0.5
                 else:
-                    # Use actual working days calculation
-                    from datetime import timedelta
-                    total_days = (end - start).days + 1
-                    working_days = 0
-                    for x in range(total_days):
-                        current_day = start + timedelta(days=x)
-                        if current_day.weekday() < 5:  # Exclude weekends
-                            working_days += 1
-                    days_requested = float(working_days)
+                    # Use utility function for working days calculation
+                    days_requested = float(calculate_working_days(start, end))
                 
                 try:
                     balance_record = LeaveBalance.objects.get(
