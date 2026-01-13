@@ -1,6 +1,9 @@
+from datetime import date
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.db.models import Q
+from drf_spectacular.utils import extend_schema, OpenApiExample
+from base.utils import get_employee_profile
 from .models import LeaveRequest, LeaveBalance
 from .serializers import (
     LeaveRequestSerializer, 
@@ -25,7 +28,7 @@ class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
             return LeaveBalance.objects.all().order_by('employee__user__first_name')
 
         # 2. Regular User check: Must have a profile to see anything
-        employee_profile = getattr(user, 'employee_profile', None) or getattr(user, 'employee', None)
+        employee_profile = get_employee_profile(user)
         if not employee_profile:
             return LeaveBalance.objects.none()
 
@@ -52,7 +55,7 @@ class MyLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         
         # Get employee profile
-        employee_profile = getattr(user, 'employee_profile', None) or getattr(user, 'employee', None)
+        employee_profile = get_employee_profile(user)
         if not employee_profile:
             return LeaveRequest.objects.none()
         
@@ -87,7 +90,7 @@ class SubordinateLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = LeaveRequest.objects.all()
         else:
             # Get employee profile
-            employee_profile = getattr(user, 'employee_profile', None) or getattr(user, 'employee', None)
+            employee_profile = get_employee_profile(user)
             if not employee_profile:
                 return LeaveRequest.objects.none()
             
@@ -148,6 +151,76 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
 
         return LeaveRequestSerializer
 
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'oneOf': [
+                    {
+                        'type': 'object',
+                        'properties': {
+                            'status': {'type': 'string', 'enum': ['APPROVED', 'REJECTED']},
+                            'rejection_reason': {'type': 'string', 'nullable': True}
+                        },
+                        'required': ['status'],
+                        'description': 'Manager: Approve or reject leave request'
+                    },
+                    {
+                        'type': 'object',
+                        'properties': {
+                            'start_date': {'type': 'string', 'format': 'date'},
+                            'end_date': {'type': 'string', 'format': 'date'},
+                            'reason': {'type': 'string'},
+                            'leave_type': {'type': 'string', 'enum': ['SICK', 'CASUAL', 'EARNED', 'UNPAID']},
+                            'is_half_day': {'type': 'boolean'},
+                            'half_day_period': {'type': 'string', 'enum': ['FIRST_HALF', 'SECOND_HALF'], 'nullable': True}
+                        },
+                        'description': 'Employee: Edit pending leave request (only if status=PENDING and start_date is future)'
+                    }
+                ]
+            }
+        },
+        examples=[
+            OpenApiExample(
+                'Manager: Approve Leave',
+                description='Manager approves a subordinate\'s leave request',
+                value={'status': 'APPROVED'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Manager: Reject Leave',
+                description='Manager rejects a subordinate\'s leave request',
+                value={'status': 'REJECTED', 'rejection_reason': 'Insufficient coverage during this period'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Employee: Edit Leave Dates',
+                description='Employee edits their own pending leave request',
+                value={
+                    'start_date': '2026-02-20',
+                    'end_date': '2026-02-23',
+                    'reason': 'Updated: Medical appointment rescheduled'
+                },
+                request_only=True,
+            ),
+        ],
+        description="""
+        **Update a leave request (different permissions for managers vs employees)**
+        
+        **Managers can:**
+        - Change `status` to APPROVED or REJECTED
+        - Add `rejection_reason` when rejecting
+        
+        **Employees can:**
+        - Edit their own PENDING requests if start_date is in the future
+        - Change: start_date, end_date, reason, leave_type, is_half_day, half_day_period
+        - Cannot change: status (only managers can approve/reject)
+        
+        **Restrictions:**
+        - Employees cannot edit APPROVED/REJECTED/CANCELLED requests
+        - Employees cannot edit requests that have already started
+        """
+    )
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         user = request.user
@@ -157,19 +230,45 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return super().update(request, *args, **kwargs)
 
-        # 2. Block employees from editing their own leaves
+        # 2. Employee editing their own request
         if instance.employee == user_employee:
-            return Response(
-                {"detail": "Forbidden: Employees cannot edit their own requests. Contact your manager."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            # Check if status is PENDING
+            if instance.status != 'PENDING':
+                return Response(
+                    {"detail": f"Cannot edit: Leave request is already {instance.status}. Contact your manager for changes."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if start_date is in the future
+            if instance.start_date <= date.today():
+                return Response(
+                    {"detail": "Cannot edit: Leave has already started or is in the past."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if trying to change status
+            if 'status' in request.data:
+                return Response(
+                    {"detail": "Forbidden: You cannot change the status. Only your manager can approve/reject."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Allow editing other fields
+            return super().update(request, *args, **kwargs)
 
         # 3. Managers can only change status/reason for their team
         if user_employee and instance.employee.manager == user_employee:
             allowed_fields = ['status', 'rejection_reason']
-            if any(key not in allowed_fields for key in request.data.keys()):
+            disallowed_fields = [key for key in request.data.keys() if key not in allowed_fields]
+            
+            if disallowed_fields:
+                print(f"🚫 Disallowed fields sent: {disallowed_fields}")
+                print(f"   Allowed fields: {allowed_fields}")
+                print(f"   Request data keys: {list(request.data.keys())}")
                 return Response(
-                    {"detail": "Forbidden: Managers can only modify status or rejection reason."},
+                    {
+                        "detail": f"Forbidden: Managers can only modify 'status' or 'rejection_reason'. You sent: {', '.join(disallowed_fields)}"
+                    },
                     status=status.HTTP_403_FORBIDDEN
                 )
             return super().update(request, *args, **kwargs)
@@ -178,6 +277,79 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
             {"detail": "You do not have permission to modify this request."},
             status=status.HTTP_403_FORBIDDEN
         )
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'oneOf': [
+                    {
+                        'type': 'object',
+                        'properties': {
+                            'status': {'type': 'string', 'enum': ['APPROVED', 'REJECTED']},
+                            'rejection_reason': {'type': 'string', 'nullable': True}
+                        },
+                        'required': ['status'],
+                        'description': 'Manager: Approve or reject leave request'
+                    },
+                    {
+                        'type': 'object',
+                        'properties': {
+                            'start_date': {'type': 'string', 'format': 'date'},
+                            'end_date': {'type': 'string', 'format': 'date'},
+                            'reason': {'type': 'string'},
+                            'leave_type': {'type': 'string', 'enum': ['SICK', 'CASUAL', 'EARNED', 'UNPAID']},
+                            'is_half_day': {'type': 'boolean'},
+                            'half_day_period': {'type': 'string', 'enum': ['FIRST_HALF', 'SECOND_HALF'], 'nullable': True}
+                        },
+                        'description': 'Employee: Edit pending leave request (only if status=PENDING and start_date is future)'
+                    }
+                ]
+            }
+        },
+        examples=[
+            OpenApiExample(
+                'Manager: Approve Leave',
+                description='Manager approves a subordinate\'s leave request',
+                value={'status': 'APPROVED'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Manager: Reject Leave',
+                description='Manager rejects a subordinate\'s leave request',
+                value={'status': 'REJECTED', 'rejection_reason': 'Insufficient coverage during this period'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Employee: Edit Leave Dates',
+                description='Employee edits their own pending leave request',
+                value={
+                    'start_date': '2026-02-20',
+                    'end_date': '2026-02-23',
+                    'reason': 'Updated: Medical appointment rescheduled'
+                },
+                request_only=True,
+            ),
+        ],
+        description="""
+        **Update a leave request (different permissions for managers vs employees)**
+        
+        **Managers can:**
+        - Change `status` to APPROVED or REJECTED
+        - Add `rejection_reason` when rejecting
+        
+        **Employees can:**
+        - Edit their own PENDING requests if start_date is in the future
+        - Change: start_date, end_date, reason, leave_type, is_half_day, half_day_period
+        - Cannot change: status (only managers can approve/reject)
+        
+        **Restrictions:**
+        - Employees cannot edit APPROVED/REJECTED/CANCELLED requests
+        - Employees cannot edit requests that have already started
+        """
+    )
+    def partial_update(self, request, *args, **kwargs):
+        """PATCH method - same logic as update"""
+        return self.update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         if not request.user.is_superuser:
