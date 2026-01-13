@@ -1,8 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from datetime import timedelta  # <--- NEW IMPORT
 from base.models import BaseTemplateModel
+from base.utils import calculate_working_days
 from organization.models import Employee
 
 class LeaveRequest(BaseTemplateModel):
@@ -76,17 +76,9 @@ class LeaveRequest(BaseTemplateModel):
         if not self.start_date or not self.end_date:
             return 0.0
         
-        # Calculate working days (excluding weekends)
-        total_days = (self.end_date - self.start_date).days + 1
-        working_days = 0
-        
-        for x in range(total_days):
-            current_day = self.start_date + timedelta(days=x)
-            # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
-            if current_day.weekday() < 5: 
-                working_days += 1
-                
-        return float(working_days)
+        # Use utility function for working days calculation
+        return float(calculate_working_days(self.start_date, self.end_date))
+
 
     def clean(self):
         """Validation Logic"""
