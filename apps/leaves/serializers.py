@@ -5,7 +5,7 @@ from apps.base.serializers import BaseTemplateSerializer
 from base.utils import calculate_working_days, is_weekend, get_employee_profile
 from .models import LeaveRequest, LeaveBalance
 from organization.models import Employee
-from organization.serializers import EmployeeBasicSerializer, DepartmentBasicSerializer
+from organization.serializers import EmployeeBasicSerializer
 
 # Note: EmployeeBasicSerializer is now imported from organization.serializers
 # It already includes nested department field
