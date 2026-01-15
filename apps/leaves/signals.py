@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from organization.models import Employee
-from .models import LeaveBalance, LeaveRequest
+from apps.organization.models import Employee
+from apps.leaves.models import LeaveBalance, LeaveRequest
 from django.db.models import F
 
 # --- 1. Auto-Create Balances for New Employees ---

@@ -2,10 +2,10 @@ from rest_framework import serializers
 from django.db.models import Q
 from datetime import date
 from apps.base.serializers import BaseTemplateSerializer
-from base.utils import calculate_working_days, is_weekend, get_employee_profile
-from .models import LeaveRequest, LeaveBalance
-from organization.models import Employee
-from organization.serializers import EmployeeBasicSerializer
+from apps.base.utils import calculate_working_days, is_weekend, get_employee_profile
+from apps.leaves.models import LeaveRequest, LeaveBalance
+from apps.organization.models import Employee
+from apps.organization.serializers import EmployeeBasicSerializer
 
 # Note: EmployeeBasicSerializer is now imported from organization.serializers
 # It already includes nested department field

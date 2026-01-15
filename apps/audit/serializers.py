@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import AuditLog
+from apps.audit.models import AuditLog
 from apps.users.serializers import UserBasicSerializer
 
 User = get_user_model()

@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
-from .models import AuditLog
-from .serializers import AuditLogSerializer
+from apps.audit.models import AuditLog
+from apps.audit.serializers import AuditLogSerializer
 from drf_spectacular.utils import extend_schema
 
 @extend_schema(tags=['System - Audit Logs'])  # <--- Group under System

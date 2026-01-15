@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from base.models import BaseTemplateModel
+from apps.base.models import BaseTemplateModel
 
 class Department(BaseTemplateModel):
     name = models.CharField(max_length=100)

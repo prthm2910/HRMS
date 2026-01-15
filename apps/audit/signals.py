@@ -4,8 +4,8 @@ from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 import json
 
-from .models import AuditLog
-from .utils import get_audit_data
+from apps.audit.models import AuditLog
+from apps.base.utils import get_audit_data
 
 # 1. Get the User Model dynamically
 User = get_user_model()

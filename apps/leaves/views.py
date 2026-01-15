@@ -3,9 +3,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
-from base.utils import get_employee_profile
-from .models import LeaveRequest, LeaveBalance
-from .serializers import (
+from apps.base.utils import get_employee_profile
+from apps.leaves.models import LeaveRequest, LeaveBalance
+from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
     LeaveUpdateSerializer, 

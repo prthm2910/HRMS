@@ -1,9 +1,9 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from base.models import BaseTemplateModel
-from base.utils import calculate_working_days
-from organization.models import Employee
+from apps.base.models import BaseTemplateModel
+from apps.base.utils import calculate_working_days
+from apps.organization.models import Employee
 
 class LeaveRequest(BaseTemplateModel):
     # Enums for Dropdowns

@@ -1,9 +1,8 @@
 # hrms/apps/users/models.py
 
-import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from base.models import BaseTemplateModel
+from apps.base.models import BaseTemplateModel
 
 # ------------------------------------------------------------------
 # CONCEPT: Custom User Model

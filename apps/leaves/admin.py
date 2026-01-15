@@ -1,6 +1,6 @@
 from django.contrib import admin
-from base.utils import get_employee_profile
-from .models import LeaveRequest, LeaveBalance
+from apps.base.utils import get_employee_profile
+from apps.leaves.models import LeaveRequest, LeaveBalance
 
 
 @admin.register(LeaveRequest)

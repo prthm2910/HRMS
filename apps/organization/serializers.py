@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.base.serializers import BaseTemplateSerializer
-from .models import Employee, Department
+from apps.organization.models import Employee, Department
 
 User = get_user_model()
 

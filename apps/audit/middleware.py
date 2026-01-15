@@ -2,7 +2,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 # ^^^ IF THIS FAILS: pip install djangorestframework-simplejwt
 # IF YOU USE STANDARD TOKENS: from rest_framework.authentication import TokenAuthentication
 
-from .utils import set_audit_data, clear_audit_data
+from apps.base.utils import set_audit_data, clear_audit_data
 
 class AuditMiddleware:
     def __init__(self, get_response):

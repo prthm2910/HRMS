@@ -2,8 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 # Import from the new package structure
-from .views.v1 import EmployeeViewSetV1, DepartmentViewSetV1
-from .views.v2 import EmployeeViewSetV2, DepartmentViewSetV2
+from apps.organization.views.v1 import EmployeeViewSetV1, DepartmentViewSetV1
+from apps.organization.views.v2 import EmployeeViewSetV2, DepartmentViewSetV2
 
 # --- V1 Router (Hard Delete) ---
 router_v1 = DefaultRouter()
