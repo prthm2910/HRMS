@@ -34,7 +34,7 @@ urlpatterns = [
     # 3. Redoc UI (The Clean Docs)
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     # --- APP URLS ---
-    path('api/auth/', include('users.urls')),
-    path('api/organization/', include('organization.urls')),
-    path('api/leaves/', include('leaves.urls')),
+    path('api/auth/', include('apps.users.urls')),
+    path('api/organization/', include('apps.organization.urls')),
+    path('api/leaves/', include('apps.leaves.urls')),
 ]
