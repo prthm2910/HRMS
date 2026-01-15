@@ -53,3 +53,10 @@ DJANGO_DATABASES = """{
 }"""
 
 
+LOCAL_APPS = [
+    'apps.users.apps.UsersConfig',            # Custom user app
+    'apps.audit.apps.AuditConfig',            # Audit logs app
+    'apps.leaves.apps.LeavesConfig',
+    'apps.organization.apps.OrganizationConfig',
+    'apps.base.apps.BaseConfig',
+]
