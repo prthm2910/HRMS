@@ -2,7 +2,8 @@ from django.apps import AppConfig
 
 class LeavesConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'leaves' 
+    name = 'apps.leaves'
+    label = 'leaves'  # App label for model references
 
     def ready(self):
-        import leaves.signals 
+        import apps.leaves.signals 
