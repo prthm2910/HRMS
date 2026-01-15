@@ -17,7 +17,7 @@ import environ
 from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS
 from hrms.config.drf import DRF_REST_FRAMEWORK
 from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
-from hrms.config.local_apps import LOCAL_APPS
+from hrms.config.django import LOCAL_APPS
 from hrms.config.helper_functions import get_db_config, get_simple_jwt_config
 
 # ==============================================================================
@@ -40,10 +40,6 @@ env = environ.Env(
 env_file_path = os.path.join(BASE_DIR.parent, 'env/hrms_env/.env')
 environ.Env.read_env(env_file_path)
 
-# Add 'apps' directory to sys.path
-# This allows clean imports like 'from users.models import...' instead of 'apps.users...'
-APPS_DIR = BASE_DIR / 'apps'
-sys.path.insert(0, str(APPS_DIR))
 
 
 # ==============================================================================
