@@ -2,9 +2,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
-from base.utils import get_employee_profile
-from organization.models import Employee, Department
-from organization.serializers import EmployeeSerializer, DepartmentSerializer
+from apps.base.utils import get_employee_profile
+from apps.organization.models import Employee, Department
+from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer
 
 @extend_schema(tags=['V2 - Departments (Soft Delete)'])
 class DepartmentViewSetV2(viewsets.ModelViewSet):
