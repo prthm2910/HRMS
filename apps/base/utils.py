@@ -7,24 +7,57 @@ import threading
 _thread_locals = threading.local()
 
 
-def calculate_working_days(start_date, end_date):
+def calculate_working_days(start_date, end_date, region=None):
     """
-    Calculate working days between two dates (excluding weekends).
+    Calculate working days between two dates (excluding weekends and holidays).
     
     Args:
         start_date (date): Start date
         end_date (date): End date
+        region (str, optional): Region to filter holidays (e.g., 'Mumbai', 'All India')
         
     Returns:
-        int: Number of working days (Monday-Friday)
+        tuple: (working_days, excluded_holidays)
+            - working_days (int): Number of working days (Monday-Friday, excluding holidays)
+            - excluded_holidays (list): List of dicts with holiday info that were excluded
         
     Example:
         >>> from datetime import date
         >>> calculate_working_days(date(2026, 2, 20), date(2026, 2, 23))
-        2  # Friday and Monday (skips Sat/Sun)
+        (2, [])  # Friday and Monday (skips Sat/Sun), no holidays
+        
+        >>> calculate_working_days(date(2026, 1, 24), date(2026, 1, 28))
+        (4, [{'date': '2026-01-26', 'name': 'Republic Day'}])  # Excludes Jan 26 holiday
     """
     if not start_date or not end_date:
-        return 0
+        return 0, []
+    
+    # Get active holidays in the date range
+    # Import here to avoid circular imports
+    from apps.holidays.models import Holiday
+    
+    holidays_query = Holiday.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date,
+        is_active=True,
+        is_deleted=False
+    )
+    
+    # Filter by region if provided
+    if region:
+        holidays_query = holidays_query.filter(region=region)
+    
+    # Get holiday dates
+    holiday_dates = set(holidays_query.values_list('date', flat=True))
+    
+    # Get holiday details for notification
+    excluded_holidays = []
+    for holiday in holidays_query:
+        excluded_holidays.append({
+            'date': str(holiday.date),
+            'name': holiday.name,
+            'region': holiday.region or 'All'
+        })
     
     total_days = (end_date - start_date).days + 1
     working_days = 0
@@ -32,10 +65,14 @@ def calculate_working_days(start_date, end_date):
     for x in range(total_days):
         current_day = start_date + timedelta(days=x)
         # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
-        if current_day.weekday() < 5:
+        is_weekday = current_day.weekday() < 5
+        is_holiday = current_day in holiday_dates
+        
+        # Count as working day if it's a weekday AND not a holiday
+        if is_weekday and not is_holiday:
             working_days += 1
             
-    return working_days
+    return working_days, excluded_holidays
 
 
 def is_weekend(check_date):
