@@ -18,7 +18,7 @@ from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CO
 from hrms.config.drf import DRF_REST_FRAMEWORK
 from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
 from hrms.config.django import LOCAL_APPS
-from hrms.config.helper_functions import get_db_config, get_simple_jwt_config
+from hrms.config.utils import get_db_config, get_simple_jwt_config
 
 # ==============================================================================
 # 1. CORE CONFIGURATION
