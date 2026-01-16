@@ -149,3 +149,10 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 # In production, set CORS_ALLOW_ALL_ORIGINS = False and use the list below
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS')
+
+
+# ==============================================================================
+# 11. GEMINI API CONFIGURATION (for OCR feature)
+# ==============================================================================
+
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
