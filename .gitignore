@@ -19,3 +19,6 @@ media/
 # Redundant files
 test.py
 file_struct.txt
+
+# Documentation (local artifacts)
+docs/
