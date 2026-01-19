@@ -36,7 +36,8 @@ class Holiday(BaseTemplateModel):
     region = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Region/location for this holiday (e.g., 'Mumbai', 'All India'). Leave blank for company-wide."
+        default='All India',
+        help_text="Region/location for this holiday (e.g., 'Mumbai', 'Bangalore'). Defaults to 'All India' for nationwide holidays."
     )
     is_working_day = models.BooleanField(
         default=False,
@@ -61,11 +62,22 @@ class Holiday(BaseTemplateModel):
         if self.name and len(self.name.strip()) < 3:
             raise ValidationError(_("Holiday name must be at least 3 characters long."))
         
-        # Validate that new holidays are not in the past (only for creation)
-        if not self.pk and self.date and self.date < date.today():
-            raise ValidationError(_("Cannot create holidays for past dates."))
+        # Validate that holidays are not in the past
+        if self.date and self.date < date.today():
+            if not self.pk:
+                # Creating a new holiday in the past
+                raise ValidationError(_("Cannot create holidays for past dates."))
+            else:
+                # Updating an existing holiday - check if date was changed to past
+                try:
+                    old_instance = Holiday.objects.get(pk=self.pk)
+                    if old_instance.date != self.date:
+                        raise ValidationError(_("Cannot change holiday date to a past date."))
+                except Holiday.DoesNotExist:
+                    # New instance, treat as creation
+                    raise ValidationError(_("Cannot create holidays for past dates."))
         
-        # Validate half-day period requirement
+        # Validate recurring holiday requirements
         if self.is_recurring and not self.name:
             raise ValidationError(_("Recurring holidays must have a name."))
 
@@ -79,8 +91,13 @@ class Holiday(BaseTemplateModel):
         
         # Check if this is an update and if is_recurring changed
         if not is_new:
-            old_instance = Holiday.objects.get(pk=self.pk)
-            was_recurring = old_instance.is_recurring
+            try:
+                old_instance = Holiday.objects.get(pk=self.pk)
+                was_recurring = old_instance.is_recurring
+            except Holiday.DoesNotExist:
+                # If the instance doesn't exist, treat it as a new record
+                is_new = True
+                was_recurring = False
         
         # Generate recurring group ID if this is a new recurring holiday
         if is_new and self.is_recurring and not self.recurring_group_id:
