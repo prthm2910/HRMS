@@ -24,3 +24,5 @@ sqlparse==0.5.5
 tzdata==2025.3
 uritemplate==4.2.0
 urllib3==2.6.2
+pydantic==2.10.5
+google-generativeai==0.8.3

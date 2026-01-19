@@ -66,9 +66,9 @@ class LeaveRequest(BaseTemplateModel):
     @property
     def duration(self):
         """
-        Calculates actual leave duration considering half-days.
+        Calculates actual leave duration considering half-days and holidays.
         Returns decimal: 0.5 for half-day, working days (float) for full-day.
-        Excludes weekends (Sat/Sun).
+        Excludes weekends (Sat/Sun) and holidays.
         """
         if self.is_half_day:
             return 0.5
@@ -76,8 +76,9 @@ class LeaveRequest(BaseTemplateModel):
         if not self.start_date or not self.end_date:
             return 0.0
         
-        # Use utility function for working days calculation
-        return float(calculate_working_days(self.start_date, self.end_date))
+        # Use utility function for working days calculation (returns tuple)
+        working_days, _ = calculate_working_days(self.start_date, self.end_date)
+        return float(working_days)
 
 
     def clean(self):

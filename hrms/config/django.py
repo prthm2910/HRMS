@@ -59,4 +59,5 @@ LOCAL_APPS = [
     'apps.leaves.apps.LeavesConfig',
     'apps.organization.apps.OrganizationConfig',
     'apps.base.apps.BaseConfig',
+    'apps.holidays.apps.HolidaysConfig',
 ]
