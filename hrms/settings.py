@@ -155,4 +155,4 @@ if not DEBUG:
 # 11. GEMINI API CONFIGURATION (for OCR feature)
 # ==============================================================================
 
-GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+GEMINI_API_KEY = env('GOOGLE_API_KEY', default='')
