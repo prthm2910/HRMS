@@ -95,6 +95,133 @@ def is_weekend(check_date):
     return check_date.weekday() >= 5  # 5=Saturday, 6=Sunday
 
 
+def is_holiday(check_date, region=None):
+    """
+    Check if a date is a declared holiday.
+    
+    Args:
+        check_date (date): Date to check
+        region (str, optional): Region to filter holidays (e.g., 'Mumbai', 'All India')
+        
+    Returns:
+        tuple: (is_holiday, holiday_info)
+            - is_holiday (bool): True if the date is a holiday, False otherwise
+            - holiday_info (dict): Holiday details if found, None otherwise
+        
+    Example:
+        >>> from datetime import date
+        >>> is_holiday(date(2026, 1, 26))
+        (True, {'name': 'Republic Day', 'description': '...', 'region': 'All India'})
+        >>> is_holiday(date(2026, 1, 27))
+        (False, None)
+    """
+    from apps.holidays.models import Holiday
+    
+    try:
+        holiday_query = Holiday.objects.filter(
+            date=check_date,
+            is_active=True,
+            is_deleted=False
+        )
+        
+        # Filter by region if provided
+        if region:
+            holiday_query = holiday_query.filter(region=region)
+        
+        holiday = holiday_query.first()
+        
+        if holiday:
+            return True, {
+                'name': holiday.name,
+                'description': holiday.description,
+                'region': holiday.region or 'All India'
+            }
+        return False, None
+    except Exception:
+        return False, None
+
+
+def get_non_working_days_info(start_date, end_date, region=None):
+    """
+    Get detailed information about holidays and weekends in a date range.
+    
+    Args:
+        start_date (date): Start date
+        end_date (date): End date
+        region (str, optional): Region to filter holidays
+        
+    Returns:
+        dict: Dictionary containing:
+            - total_count (int): Total number of non-working days
+            - details (list): List of dicts with date, type, and metadata
+        
+    Example:
+        >>> from datetime import date
+        >>> get_non_working_days_info(date(2026, 1, 24), date(2026, 1, 27))
+        {
+            'total_count': 2,
+            'details': [
+                {'date': '2026-01-25', 'type': 'weekend', 'day': 'Saturday'},
+                {'date': '2026-01-26', 'type': 'holiday', 'name': 'Republic Day', 'description': '...'}
+            ]
+        }
+    """
+    if not start_date or not end_date:
+        return {'total_count': 0, 'details': []}
+    
+    from apps.holidays.models import Holiday
+    
+    # Get all holidays in the date range
+    holidays_query = Holiday.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date,
+        is_active=True,
+        is_deleted=False
+    )
+    
+    if region:
+        holidays_query = holidays_query.filter(region=region)
+    
+    # Create a dict of holiday dates for quick lookup
+    holidays_dict = {
+        holiday.date: {
+            'name': holiday.name,
+            'description': holiday.description,
+            'region': holiday.region or 'All India'
+        }
+        for holiday in holidays_query
+    }
+    
+    non_working_days = []
+    total_days = (end_date - start_date).days + 1
+    
+    for x in range(total_days):
+        current_day = start_date + timedelta(days=x)
+        
+        # Check if it's a holiday
+        if current_day in holidays_dict:
+            holiday_info = holidays_dict[current_day]
+            non_working_days.append({
+                'date': str(current_day),
+                'type': 'holiday',
+                'name': holiday_info['name'],
+                'description': holiday_info['description']
+            })
+        # Check if it's a weekend
+        elif is_weekend(current_day):
+            day_name = current_day.strftime('%A')  # 'Saturday' or 'Sunday'
+            non_working_days.append({
+                'date': str(current_day),
+                'type': 'weekend',
+                'day': day_name
+            })
+    
+    return {
+        'total_count': len(non_working_days),
+        'details': non_working_days
+    }
+
+
 def get_employee_profile(user):
     """
     Get employee profile from user object.
