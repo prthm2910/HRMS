@@ -1,14 +1,15 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from datetime import date
-import google.generativeai as genai
+import google.generativeai as genai 
 from django.conf import settings
 import json
 import base64
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiTypes, inline_serializer, extend_schema_field
 
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
@@ -16,7 +17,8 @@ from apps.holidays.serializers import (
     HolidayListSerializer,
     BulkHolidayCreateSerializer,
     HolidayExtraction,
-    BulkHolidayExtraction
+    BulkHolidayExtraction,
+    ImageUploadSerializer
 )
 
 
@@ -92,9 +94,49 @@ class HolidayViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """Soft delete instead of hard delete"""
         instance.is_deleted = True
+        instance.is_active = False
         instance.save()
     
-    @action(detail=False, methods=['POST'], permission_classes=[IsAdminUser])
+    
+    @extend_schema(
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'image': {
+                        'type': 'string',
+                        'format': 'binary',
+                        'description': 'Upload an image file containing holiday list'
+                    }
+                },
+                'required': ['image']
+            }
+        },
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'upload_id': {'type': 'string'},
+                    'image_url': {'type': 'string'},
+                    'image_path': {'type': 'string'},
+                    'extracted_holidays': {'type': 'array'},
+                    'total_count': {'type': 'integer'},
+                    'validation_errors': {'type': 'array', 'nullable': True}
+                }
+            },
+            400: {'description': 'No image file provided'},
+            500: {'description': 'Failed to process image'}
+        },
+        description="Extract holidays from an uploaded image using Gemini AI OCR. Upload an image containing a holiday list and get structured holiday data back.",
+        summary="Extract holidays from image via OCR"
+    )
+    @action(
+        detail=False, 
+        methods=['POST'], 
+        permission_classes=[IsAdminUser],
+        parser_classes=[MultiPartParser, FormParser]
+    )
     def extract_from_image(self, request):
         """
         Extract holidays from an uploaded image using Gemini OCR.
@@ -127,7 +169,7 @@ class HolidayViewSet(viewsets.ModelViewSet):
         try:
             # Configure Gemini API
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             # Read image data from the saved file
             with upload_record.image.open('rb') as img:
@@ -135,38 +177,48 @@ class HolidayViewSet(viewsets.ModelViewSet):
             
             # Prepare the prompt
             prompt = """
-            Analyze this handwritten or printed holiday list image and extract the following information for each holiday:
-            - Date (in YYYY-MM-DD format)
-            - Holiday name
-            - Type or description (if mentioned)
-            - Is it recurring yearly? (yes/no)
-            - Region (if mentioned, e.g., Mumbai, Bangalore, All India)
-            
-            Return the data in JSON format as an array of objects with keys: date, name, description, is_recurring (boolean), region.
-            
-            Example output:
-            [
-              {
-                "date": "2026-01-26",
-                "name": "Republic Day",
-                "description": "National Holiday",
-                "is_recurring": true,
-                "region": "All India"
-              },
-              {
-                "date": "2026-08-15",
-                "name": "Independence Day",
-                "description": "",
-                "is_recurring": true,
-                "region": "All India"
-              }
-            ]
-            
-            Important:
-            - Only return valid JSON, no additional text
-            - Use YYYY-MM-DD format for dates
-            - Set is_recurring to true for national holidays or holidays that repeat yearly
-            - If region is not mentioned, use empty string ""
+
+---
+
+Analyze this handwritten or printed holiday list image and extract the following information for each holiday:
+
+* Date (in YYYY-MM-DD format)
+* Holiday name
+* Type or description (if mentioned)
+* Is it recurring yearly? (yes/no)
+* Region (if mentioned, e.g., Mumbai, Bangalore, All India)
+
+Return the data in JSON format as an array of objects with keys: `date`, `name`, `description`, `is_recurring` (boolean), `region`.
+
+**Example output:**
+
+```json
+[
+  {
+    "date": "2026-01-26",
+    "name": "Republic Day",
+    "description": "National Holiday",
+    "is_recurring": true,
+    "region": "All India"
+  },
+  {
+    "date": "2026-08-15",
+    "name": "Independence Day",
+    "description": "",
+    "is_recurring": true,
+    "region": "All India"
+  }
+]
+
+```
+
+**Important Instructions:**
+
+1. **Language & Translation:** The handwritten or printed text may be in an **Indian regional language** (e.g., Hindi, Marathi, Gujarati, Tamil, etc.). You **MUST translate** the holiday name and any descriptions into **English** for the JSON output.
+2. **Format:** Only return valid JSON, no additional text.
+3. **Dates:** Use YYYY-MM-DD format. If the year is not explicitly written on the page, infer it from the context or use the current year.
+4. **Recurring:** Set `is_recurring` to `true` for national holidays or holidays that repeat yearly on the same date.
+5. **Region:** If the region is not mentioned, use an empty string ".
             """
             
             # Generate content from image
@@ -199,7 +251,8 @@ class HolidayViewSet(viewsets.ModelViewSet):
                 try:
                     # Validate each holiday
                     holiday = HolidayExtraction(**holiday_data)
-                    validated_holidays.append(holiday.model_dump())
+                    # Use mode='json' to convert date objects to ISO format strings
+                    validated_holidays.append(holiday.model_dump(mode='json'))
                 except Exception as e:
                     validation_errors.append({
                         'index': idx,
