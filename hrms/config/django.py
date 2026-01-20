@@ -59,5 +59,6 @@ LOCAL_APPS = [
     'apps.leaves.apps.LeavesConfig',
     'apps.organization.apps.OrganizationConfig',
     'apps.base.apps.BaseConfig',
+    'apps.ai_services.apps.AiServicesConfig',  # AI services (OCR, NLP, etc.)
     'apps.holidays.apps.HolidaysConfig',
 ]
