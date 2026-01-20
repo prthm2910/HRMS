@@ -8,7 +8,8 @@ class AuditLog(models.Model):
         ('CREATE', 'Create'),
         ('UPDATE', 'Update'),
         ('DELETE', 'Delete'),
-        ('HARD_DELETE', 'Hard Delete 💥'),
+        ('HARD_DELETE', 'Hard Delete'),
+        ('AI_SERVICE', 'AI Service Call'),
     ]
 
     # Who did it?
@@ -74,3 +75,91 @@ class AuditLog(models.Model):
             return "Python Script"
         else:
             return "Unknown Source"
+
+
+class AIOperationLog(models.Model):
+    """
+    Detailed logs for AI service operations.
+    Linked to AuditLog via OneToOneField for nested audit trail.
+    """
+    
+    OPERATION_CHOICES = [
+        ('OCR', 'Optical Character Recognition'),
+        ('NLP', 'Natural Language Processing'),
+        ('VISION', 'Computer Vision'),
+        ('CLASSIFICATION', 'Classification'),
+        ('GENERATION', 'Content Generation'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed'),
+        ('PENDING', 'Pending'),
+    ]
+    
+    # Link to parent audit entry
+    audit_log = models.OneToOneField(
+        AuditLog,
+        on_delete=models.CASCADE,
+        related_name='ai_operation',
+        help_text="Parent audit log entry"
+    )
+    
+    # AI operation details
+    operation_type = models.CharField(
+        max_length=50,
+        choices=OPERATION_CHOICES,
+        help_text="Type of AI operation performed"
+    )
+    
+    model_used = models.CharField(
+        max_length=100,
+        help_text="AI model used (e.g., 'gemini-3-flash-preview', 'gpt-4')"
+    )
+    
+    # Input/Output data
+    input_data = models.JSONField(
+        help_text="Summary of input data (e.g., image path, text snippet)"
+    )
+    
+    output_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Summary of output data (e.g., extracted entities, classification results)"
+    )
+    
+    # Status and performance
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING'
+    )
+    
+    processing_time_seconds = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Processing time in seconds (e.g., 1.245 seconds)"
+    )
+    
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Error message if operation failed"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'ai_operation_logs'
+        verbose_name = 'AI Operation Log'
+        verbose_name_plural = 'AI Operation Logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['operation_type', 'status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.operation_type} - {self.status} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
