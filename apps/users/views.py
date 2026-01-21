@@ -11,9 +11,8 @@ class RegisterView(generics.CreateAPIView):
     Endpoint: /api/auth/register/
     Permission: AllowAny (Anyone can register)
     """
-    # Fetches all the User objects
     queryset = User.objects.all()
-    permission_classes = (permissions.AllowAny,)
+    permission_classes = [permissions.AllowAny]
     serializer_class = RegisterSerializer 
 
 
@@ -25,7 +24,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     Logic: Returns the profile of the CURRENT user (request.user)
     """
     serializer_class = UserSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         # This overrides the default "lookup by ID" behavior.

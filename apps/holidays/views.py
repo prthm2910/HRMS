@@ -5,19 +5,14 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from datetime import date
-import google.generativeai as genai 
-from django.conf import settings
-import json
-import base64
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiTypes, inline_serializer, extend_schema_field
 
+from apps.base.views import SoftDeleteMixin
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
     HolidaySerializer,
     HolidayListSerializer,
     BulkHolidayCreateSerializer,
-    HolidayExtraction,
-    BulkHolidayExtraction,
     ImageUploadSerializer
 )
 
@@ -39,7 +34,7 @@ class IsAdminOrReadOnly(IsAuthenticated):
         return request.user.is_staff or request.user.is_superuser
 
 
-class HolidayViewSet(viewsets.ModelViewSet):
+class HolidayViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing holidays.
     
@@ -91,12 +86,7 @@ class HolidayViewSet(viewsets.ModelViewSet):
             return HolidayListSerializer
         return HolidaySerializer
     
-    def perform_destroy(self, instance):
-        """Soft delete instead of hard delete"""
-        instance.is_deleted = True
-        instance.is_active = False
-        instance.save()
-    
+    # perform_destroy is handled by SoftDeleteMixin
     
     @extend_schema(
         request={
@@ -141,12 +131,6 @@ class HolidayViewSet(viewsets.ModelViewSet):
         """
         Extract holidays from an uploaded image using Gemini OCR.
         Saves the image to MEDIA storage for audit trail.
-        
-        Request:
-        - multipart/form-data with 'image' file
-        
-        Response:
-        - JSON with extracted holidays array and image URL
         """
         if 'image' not in request.FILES:
             return Response(
@@ -158,135 +142,76 @@ class HolidayViewSet(viewsets.ModelViewSet):
         
         # Import here to avoid circular imports
         from apps.holidays.models import HolidayUpload
+        from apps.ai_services.services import GeminiOCRService
         
-        # Create upload record (saves image to MEDIA_ROOT automatically)
+        # Create upload record
         upload_record = HolidayUpload.objects.create(
             uploaded_by=request.user,
-            image=image_file,  # Django saves this to MEDIA_ROOT/holiday_uploads/YYYY/MM/
+            image=image_file,
             extraction_status='PENDING'
         )
         
         try:
-            # Configure Gemini API
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-3-flash-preview')
+            # Use AI service for OCR processing
+            ocr_service = GeminiOCRService()
             
-            # Read image data from the saved file
+            # Open the saved image file for processing
             with upload_record.image.open('rb') as img:
+                # Create a file-like object that the service can read
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                import io
+                
+                # Read the image data
                 image_data = img.read()
+                
+                # Create a new file object with the data
+                image_file_for_service = InMemoryUploadedFile(
+                    file=io.BytesIO(image_data),
+                    field_name='image',
+                    name=upload_record.image.name,
+                    content_type=image_file.content_type,
+                    size=len(image_data),
+                    charset=None
+                )
+                
+                # Extract holidays using the service
+                result = ocr_service.extract_holidays_from_image(
+                    image_file=image_file_for_service,
+                    user=request.user,
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    path=request.path
+                )
             
-            # Prepare the prompt
-            prompt = """
-
----
-
-Analyze this handwritten or printed holiday list image and extract the following information for each holiday:
-
-* Date (in YYYY-MM-DD format)
-* Holiday name
-* Type or description (if mentioned)
-* Is it recurring yearly? (yes/no)
-* Region (if mentioned, e.g., Mumbai, Bangalore, All India)
-
-Return the data in JSON format as an array of objects with keys: `date`, `name`, `description`, `is_recurring` (boolean), `region`.
-
-**Example output:**
-
-```json
-[
-  {
-    "date": "2026-01-26",
-    "name": "Republic Day",
-    "description": "National Holiday",
-    "is_recurring": true,
-    "region": "All India"
-  },
-  {
-    "date": "2026-08-15",
-    "name": "Independence Day",
-    "description": "",
-    "is_recurring": true,
-    "region": "All India"
-  }
-]
-
-```
-
-**Important Instructions:**
-
-1. **Language & Translation:** The handwritten or printed text may be in an **Indian regional language** (e.g., Hindi, Marathi, Gujarati, Tamil, etc.). You **MUST translate** the holiday name and any descriptions into **English** for the JSON output.
-2. **Format:** Only return valid JSON, no additional text.
-3. **Dates:** Use YYYY-MM-DD format. If the year is not explicitly written on the page, infer it from the context or use the current year.
-4. **Recurring:** Set `is_recurring` to `true` for national holidays or holidays that repeat yearly on the same date.
-5. **Region:** If the region is not mentioned, use an empty string ".
-            """
+            # Check if extraction was successful
+            if result['status'] == 'SUCCESS':
+                # Save extracted data to upload record
+                upload_record.extracted_data = result['extracted_holidays']
+                upload_record.extraction_status = 'SUCCESS'
+                upload_record.save()
+                
+                return Response({
+                    'success': True,
+                    'upload_id': str(upload_record.id),
+                    'image_url': request.build_absolute_uri(upload_record.image.url),
+                    'image_path': upload_record.image.name,
+                    'holidays': result['extracted_holidays'],  # All holidays with validation_error field
+                    'total_count': result['total_count'],
+                    'has_validation_errors': result.get('has_validation_errors', False),
+                    'processing_time_ms': result.get('processing_time_ms'),
+                    'model_used': result.get('model_used')
+                }, status=status.HTTP_200_OK)
+            else:
+                # Extraction failed
+                upload_record.extraction_status = 'FAILED'
+                upload_record.error_message = result.get('error', 'Unknown error')
+                upload_record.save()
+                
+                return Response({
+                    'error': 'Failed to process image',
+                    'details': result.get('error'),
+                    'upload_id': str(upload_record.id)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # Generate content from image
-            response = model.generate_content([
-                prompt,
-                {"mime_type": image_file.content_type, "data": image_data}
-            ])
-            
-            # Extract JSON from response
-            response_text = response.text.strip()
-            
-            # Remove markdown code blocks if present
-            if response_text.startswith('```json'):
-                response_text = response_text[7:]
-            if response_text.startswith('```'):
-                response_text = response_text[3:]
-            if response_text.endswith('```'):
-                response_text = response_text[:-3]
-            
-            response_text = response_text.strip()
-            
-            # Parse JSON
-            extracted_data = json.loads(response_text)
-            
-            # Validate using Pydantic
-            validated_holidays = []
-            validation_errors = []
-            
-            for idx, holiday_data in enumerate(extracted_data):
-                try:
-                    # Validate each holiday
-                    holiday = HolidayExtraction(**holiday_data)
-                    # Use mode='json' to convert date objects to ISO format strings
-                    validated_holidays.append(holiday.model_dump(mode='json'))
-                except Exception as e:
-                    validation_errors.append({
-                        'index': idx,
-                        'data': holiday_data,
-                        'error': str(e)
-                    })
-            
-            # Save extracted data to upload record
-            upload_record.extracted_data = validated_holidays
-            upload_record.extraction_status = 'SUCCESS'
-            upload_record.save()
-            
-            return Response({
-                'success': True,
-                'upload_id': str(upload_record.id),
-                'image_url': request.build_absolute_uri(upload_record.image.url),
-                'image_path': upload_record.image.name,  # Relative path stored in DB
-                'extracted_holidays': validated_holidays,
-                'total_count': len(validated_holidays),
-                'validation_errors': validation_errors if validation_errors else None
-            }, status=status.HTTP_200_OK)
-            
-        except json.JSONDecodeError as e:
-            upload_record.extraction_status = 'FAILED'
-            upload_record.error_message = f'JSON Parse Error: {str(e)}'
-            upload_record.save()
-            
-            return Response({
-                'error': 'Failed to parse OCR response as JSON',
-                'details': str(e),
-                'raw_response': response_text[:500],  # First 500 chars for debugging
-                'upload_id': str(upload_record.id)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
         except Exception as e:
             upload_record.extraction_status = 'FAILED'
             upload_record.error_message = str(e)

@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from apps.base.models import BaseTemplateModel
 
+
 class Department(BaseTemplateModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
@@ -16,13 +17,16 @@ class Department(BaseTemplateModel):
         verbose_name_plural = 'Departments'
         db_table = 'departments'
 
+
+class EmploymentType(models.TextChoices):
+    """Employment type choices for Employee model"""
+    FULL_TIME = 'FULL_TIME', 'Full Time'
+    PART_TIME = 'PART_TIME', 'Part Time'
+    CONTRACT = 'CONTRACT', 'Contract'
+    INTERN = 'INTERN', 'Intern'
+
+
 class Employee(BaseTemplateModel):
-    EMPLOYMENT_TYPE_CHOICES = [
-        ('FULL_TIME', 'Full Time'),
-        ('PART_TIME', 'Part Time'),
-        ('CONTRACT', 'Contract'),
-        ('INTERN', 'Intern'),
-    ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -49,8 +53,8 @@ class Employee(BaseTemplateModel):
     designation = models.CharField(max_length=100)
     employment_type = models.CharField(
         max_length=20, 
-        choices=EMPLOYMENT_TYPE_CHOICES, 
-        default='FULL_TIME'
+        choices=EmploymentType.choices, 
+        default=EmploymentType.FULL_TIME
     )
     date_of_joining = models.DateField()
 

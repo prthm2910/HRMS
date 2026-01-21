@@ -19,6 +19,8 @@ DJANGO_DEFAULT_MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+LOCAL_MIDDLEWARE = ['apps.audit.middleware.AuditMiddleware']
+
 DJANGO_CORE_TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -59,5 +61,6 @@ LOCAL_APPS = [
     'apps.leaves.apps.LeavesConfig',
     'apps.organization.apps.OrganizationConfig',
     'apps.base.apps.BaseConfig',
+    'apps.ai_services.apps.AiServicesConfig',  # AI services (OCR, NLP, etc.)
     'apps.holidays.apps.HolidaysConfig',
 ]

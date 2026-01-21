@@ -4,6 +4,13 @@ from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
+from apps.base.views import (
+    BaseAuthenticatedViewSet, 
+    BaseReadOnlyAuthenticatedViewSet,
+    BaseRoleFilteredViewSet,
+    BaseRoleFilteredReadOnlyViewSet,
+    AdminWritePermissionMixin
+)
 from apps.leaves.models import LeaveRequest, LeaveBalance
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
@@ -12,94 +19,63 @@ from apps.leaves.serializers import (
     LeaveActionSerializer
 )
 
-class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
+class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
     """
     View to check remaining leaves. 
     Strictly Read-Only for everyone.
     """
+    queryset = LeaveBalance.objects.all()
     serializer_class = LeaveBalanceSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user = self.request.user
+    def get_admin_queryset(self):
+        return self.queryset.order_by('employee__user__first_name')
 
-        # 1. Admin bypass: They see ALL balances immediately
-        if user.is_superuser or user.is_staff:
-            return LeaveBalance.objects.all().order_by('employee__user__first_name')
-
-        # 2. Regular User check: Must have a profile to see anything
-        employee_profile = get_employee_profile(user)
-        if not employee_profile:
-            return LeaveBalance.objects.none()
-
-        # 3. Manager/Junior Dev Logic
+    def get_standard_user_queryset(self, employee_profile):
         # Managers see self + team; Juniors see only self
-        return LeaveBalance.objects.filter(
+        return self.queryset.filter(
             Q(employee=employee_profile) | Q(employee__manager=employee_profile)
         ).distinct().order_by('employee__user__first_name')
 
 
-class MyLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
+class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for employees to see their own leave requests.
     Returns all leave requests created by the authenticated user.
-    
-    Query Parameters:
-        - status: Filter by status (pending, approved, rejected, cancelled)
-        - Default: Returns all statuses, ordered by latest first
     """
     serializer_class = LeaveRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        
-        # Get employee profile
         employee_profile = get_employee_profile(user)
         if not employee_profile:
             return LeaveRequest.objects.none()
         
-        # Base queryset: only user's own requests
         queryset = LeaveRequest.objects.filter(employee=employee_profile)
         
-        # Status filtering via query params
-        status_filter = self.request.query_params.get('status', None)
+        status_filter = self.request.query_params.get('status')
         if status_filter and status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
             queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')
 
 
-class SubordinateLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
+class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for managers to see leave requests from their subordinates.
-    Returns leave requests from employees who report to the authenticated user.
-    
-    Query Parameters:
-        - status: Filter by status (pending, approved, rejected, cancelled, all)
-        - Default: Returns only PENDING requests, ordered by latest first
     """
     serializer_class = LeaveRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        
-        # Admin bypass: see all requests
         if user.is_superuser or user.is_staff:
             queryset = LeaveRequest.objects.all()
         else:
-            # Get employee profile
             employee_profile = get_employee_profile(user)
             if not employee_profile:
                 return LeaveRequest.objects.none()
-            
-            # Base queryset: only subordinates' requests
             queryset = LeaveRequest.objects.filter(employee__manager=employee_profile)
         
-        # Status filtering via query params (default: PENDING)
         status_filter = self.request.query_params.get('status', 'pending')
-        
         if status_filter.lower() != 'all':
             if status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
                 queryset = queryset.filter(status=status_filter.upper())
@@ -107,50 +83,40 @@ class SubordinateLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.order_by('-created_at')
 
 
-class LeaveApplyViewSet(viewsets.ModelViewSet):
+class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
     - PATCH/PUT: Managers can approve/reject subordinate requests
     - DELETE: Admin only
     """
-    permission_classes = [permissions.IsAuthenticated]
+    queryset = LeaveRequest.objects.all()
+    serializer_class = LeaveRequestSerializer
+    admin_forbidden_message = "Forbidden: Deletion is restricted to Administrators."
 
-    def get_queryset(self):
-        user = self.request.user
+    def get_admin_queryset(self):
+        return self.queryset.order_by('-created_at')
 
-        # Admin bypass
-        if user.is_superuser or user.is_staff:
-            return LeaveRequest.objects.all().order_by('-created_at')
-
-        # Get employee profile
-        employee_profile = getattr(user, 'employee_profile', None) or getattr(user, 'employee', None)
-        if not employee_profile:
-            return LeaveRequest.objects.none()
-
-        # Users can only access their own requests or subordinates' requests
-        return LeaveRequest.objects.filter(
+    def get_standard_user_queryset(self, employee_profile):
+        return self.queryset.filter(
             Q(employee=employee_profile) | 
             Q(employee__manager=employee_profile)
         ).distinct().order_by('-created_at')
 
     def get_serializer_class(self):
-        # Schema generation bypass
         if getattr(self, 'swagger_fake_view', False):
             return LeaveRequestSerializer
 
         if self.action in ['update', 'partial_update']:
             instance = self.get_object()
-            user_employee = getattr(self.request.user, 'employee_profile', None) or getattr(self.request.user, 'employee', None)
+            user_employee = get_employee_profile(self.request.user)
             
-            # Use Action Serializer if user is the Manager OR Admin
             if (user_employee and instance.employee.manager == user_employee) or self.request.user.is_superuser:
                 return LeaveActionSerializer
             
             return LeaveUpdateSerializer
 
         return LeaveRequestSerializer
-
 
     @extend_schema(
         request={
@@ -175,7 +141,7 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
                             'is_half_day': {'type': 'boolean'},
                             'half_day_period': {'type': 'string', 'enum': ['FIRST_HALF', 'SECOND_HALF'], 'nullable': True}
                         },
-                        'description': 'Employee: Edit pending leave request (only if status=PENDING and start_date is future)'
+                        'description': 'Employee: Edit pending leave request'
                     }
                 ]
             }
@@ -222,9 +188,12 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
         """
     )
     def update(self, request, *args, **kwargs):
+        # We need to keep update/partial_update because they have very specific business logic 
+        # that isn't just "is_superuser". 
+        # But we now get the benefit of AdminWritePermissionMixin for destroy().
         instance = self.get_object()
         user = request.user
-        user_employee = getattr(user, 'employee_profile', None) or getattr(user, 'employee', None)
+        user_employee = get_employee_profile(user)
 
         # 1. Admin full access
         if user.is_superuser:
@@ -260,11 +229,7 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
         if user_employee and instance.employee.manager == user_employee:
             allowed_fields = ['status', 'rejection_reason']
             disallowed_fields = [key for key in request.data.keys() if key not in allowed_fields]
-            
             if disallowed_fields:
-                print(f"🚫 Disallowed fields sent: {disallowed_fields}")
-                print(f"   Allowed fields: {allowed_fields}")
-                print(f"   Request data keys: {list(request.data.keys())}")
                 return Response(
                     {
                         "detail": f"Forbidden: Managers can only modify 'status' or 'rejection_reason'. You sent: {', '.join(disallowed_fields)}"
@@ -351,21 +316,11 @@ class LeaveApplyViewSet(viewsets.ModelViewSet):
         """PATCH method - same logic as update"""
         return self.update(request, *args, **kwargs)
 
-    def destroy(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Forbidden: Deletion is restricted to Administrators."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().destroy(request, *args, **kwargs)
-
     def perform_update(self, serializer):
-        user_employee = getattr(self.request.user, 'employee_profile', None) or getattr(self.request.user, 'employee', None)
-        
+        user_employee = get_employee_profile(self.request.user)
         if isinstance(serializer, LeaveActionSerializer):
             validated_data = serializer.validated_data or {}
-            new_status = validated_data.get('status') # type: ignore
-
+            new_status = validated_data.get('status')
             if new_status in ['APPROVED', 'REJECTED']:
                 serializer.save(action_by=user_employee)
             else:
