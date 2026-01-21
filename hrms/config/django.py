@@ -19,6 +19,8 @@ DJANGO_DEFAULT_MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+LOCAL_MIDDLEWARE = ['apps.audit.middleware.AuditMiddleware']
+
 DJANGO_CORE_TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 import environ
-from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS
+from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS, LOCAL_MIDDLEWARE 
 from hrms.config.drf import DRF_REST_FRAMEWORK
 from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
 from hrms.config.django import LOCAL_APPS
@@ -72,7 +72,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # 4. MIDDLEWARE
 # ==============================================================================
 
-MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE + ['apps.audit.middleware.AuditMiddleware']
+MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE + LOCAL_MIDDLEWARE
 
 ROOT_URLCONF = 'hrms.urls'
 
