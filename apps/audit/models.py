@@ -3,14 +3,17 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
+class AuditAction(models.TextChoices):
+    """Audit log action choices"""
+    CREATE = 'CREATE', 'Create'
+    UPDATE = 'UPDATE', 'Update'
+    DELETE = 'DELETE', 'Delete'
+    HARD_DELETE = 'HARD_DELETE', 'Hard Delete'
+    AI_SERVICE = 'AI_SERVICE', 'AI Service Call'
+
+
 class AuditLog(models.Model):
-    ACTION_CHOICES = [
-        ('CREATE', 'Create'),
-        ('UPDATE', 'Update'),
-        ('DELETE', 'Delete'),
-        ('HARD_DELETE', 'Hard Delete'),
-        ('AI_SERVICE', 'AI Service Call'),
-    ]
 
     # Who did it?
     actor = models.ForeignKey(
@@ -22,7 +25,7 @@ class AuditLog(models.Model):
     )
 
     # What did they do?
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    action = models.CharField(max_length=20, choices=AuditAction.choices)
     
     # Where did they do it? (Target Table & Row)
     table_name = models.CharField(max_length=50, help_text="The model name (e.g., 'Employee', 'LeaveRequest')")
@@ -77,25 +80,27 @@ class AuditLog(models.Model):
             return "Unknown Source"
 
 
+class AIOperationType(models.TextChoices):
+    """AI operation type choices"""
+    OCR = 'OCR', 'Optical Character Recognition'
+    NLP = 'NLP', 'Natural Language Processing'
+    VISION = 'VISION', 'Computer Vision'
+    CLASSIFICATION = 'CLASSIFICATION', 'Classification'
+    GENERATION = 'GENERATION', 'Content Generation'
+
+
+class AIOperationStatus(models.TextChoices):
+    """AI operation status choices"""
+    SUCCESS = 'SUCCESS', 'Success'
+    FAILED = 'FAILED', 'Failed'
+    PENDING = 'PENDING', 'Pending'
+
+
 class AIOperationLog(models.Model):
     """
     Detailed logs for AI service operations.
     Linked to AuditLog via OneToOneField for nested audit trail.
     """
-    
-    OPERATION_CHOICES = [
-        ('OCR', 'Optical Character Recognition'),
-        ('NLP', 'Natural Language Processing'),
-        ('VISION', 'Computer Vision'),
-        ('CLASSIFICATION', 'Classification'),
-        ('GENERATION', 'Content Generation'),
-    ]
-    
-    STATUS_CHOICES = [
-        ('SUCCESS', 'Success'),
-        ('FAILED', 'Failed'),
-        ('PENDING', 'Pending'),
-    ]
     
     # Link to parent audit entry
     audit_log = models.OneToOneField(
@@ -108,7 +113,7 @@ class AIOperationLog(models.Model):
     # AI operation details
     operation_type = models.CharField(
         max_length=50,
-        choices=OPERATION_CHOICES,
+        choices=AIOperationType.choices,
         help_text="Type of AI operation performed"
     )
     
@@ -131,8 +136,8 @@ class AIOperationLog(models.Model):
     # Status and performance
     status = models.CharField(
         max_length=20,
-        choices=STATUS_CHOICES,
-        default='PENDING'
+        choices=AIOperationStatus.choices,
+        default=AIOperationStatus.PENDING
     )
     
     processing_time_seconds = models.DecimalField(

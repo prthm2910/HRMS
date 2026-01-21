@@ -5,34 +5,37 @@ from apps.base.models import BaseTemplateModel
 from apps.base.utils import calculate_working_days
 from apps.organization.models import Employee
 
+
+class LeaveType(models.TextChoices):
+    """Leave type choices"""
+    SICK = 'SICK', 'Sick Leave'
+    CASUAL = 'CASUAL', 'Casual Leave'
+    EARNED = 'EARNED', 'Earned/Privilege Leave'
+    UNPAID = 'UNPAID', 'Loss of Pay (LWP)'
+
+
+class HalfDayPeriod(models.TextChoices):
+    """Half day period choices"""
+    FIRST_HALF = 'FIRST_HALF', 'First Half'
+    SECOND_HALF = 'SECOND_HALF', 'Second Half'
+
+
+class LeaveStatus(models.TextChoices):
+    """Leave request status choices"""
+    PENDING = 'PENDING', 'Pending'
+    APPROVED = 'APPROVED', 'Approved'
+    REJECTED = 'REJECTED', 'Rejected'
+    CANCELLED = 'CANCELLED', 'Cancelled'
+
+
 class LeaveRequest(BaseTemplateModel):
-    # Enums for Dropdowns
-    LEAVE_TYPE_CHOICES = [
-        ('SICK', 'Sick Leave'),
-        ('CASUAL', 'Casual Leave'),
-        ('EARNED', 'Earned/Privilege Leave'),
-        ('UNPAID', 'Loss of Pay (LWP)'),
-    ]
-
-    HALF_DAY_PERIOD_CHOICES = [
-        ('FIRST_HALF', 'First Half'),
-        ('SECOND_HALF', 'Second Half'),
-    ]
-
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-        ('CANCELLED', 'Cancelled'),
-    ]
-
     # 1. Who and What
     employee = models.ForeignKey(
         Employee, 
         on_delete=models.CASCADE, 
         related_name='leave_requests'
     )
-    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES)
+    leave_type = models.CharField(max_length=20, choices=LeaveType.choices)
     
     # 2. When
     start_date = models.DateField()
@@ -42,7 +45,7 @@ class LeaveRequest(BaseTemplateModel):
     is_half_day = models.BooleanField(default=False, help_text="Is this a half-day leave?")
     half_day_period = models.CharField(
         max_length=20, 
-        choices=HALF_DAY_PERIOD_CHOICES, 
+        choices=HalfDayPeriod.choices, 
         blank=True, 
         null=True,
         help_text="Which half of the day (required if is_half_day=True)"
@@ -52,7 +55,7 @@ class LeaveRequest(BaseTemplateModel):
     reason = models.TextField(help_text="Reason for leave")
     
     # 4. Approval Workflow
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=LeaveStatus.choices, default=LeaveStatus.PENDING)
     
     action_by = models.ForeignKey(
         Employee, 
@@ -110,7 +113,7 @@ class LeaveBalance(BaseTemplateModel):
         on_delete=models.CASCADE, 
         related_name='leave_balances'
     )
-    leave_type = models.CharField(max_length=20, choices=LeaveRequest.LEAVE_TYPE_CHOICES)
+    leave_type = models.CharField(max_length=20, choices=LeaveType.choices)
     
     total_allocated = models.DecimalField(max_digits=5, decimal_places=1, default=0)
     used_leaves = models.DecimalField(max_digits=5, decimal_places=1, default=0)
