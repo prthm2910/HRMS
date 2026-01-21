@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import date
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiTypes, inline_serializer, extend_schema_field
 
+from apps.base.views import SoftDeleteMixin
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
     HolidaySerializer,
@@ -33,7 +34,7 @@ class IsAdminOrReadOnly(IsAuthenticated):
         return request.user.is_staff or request.user.is_superuser
 
 
-class HolidayViewSet(viewsets.ModelViewSet):
+class HolidayViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing holidays.
     
@@ -85,12 +86,7 @@ class HolidayViewSet(viewsets.ModelViewSet):
             return HolidayListSerializer
         return HolidaySerializer
     
-    def perform_destroy(self, instance):
-        """Soft delete instead of hard delete"""
-        instance.is_deleted = True
-        instance.is_active = False
-        instance.save()
-    
+    # perform_destroy is handled by SoftDeleteMixin
     
     @extend_schema(
         request={
@@ -135,12 +131,6 @@ class HolidayViewSet(viewsets.ModelViewSet):
         """
         Extract holidays from an uploaded image using Gemini OCR.
         Saves the image to MEDIA storage for audit trail.
-        
-        Request:
-        - multipart/form-data with 'image' file
-        
-        Response:
-        - JSON with extracted holidays array and image URL
         """
         if 'image' not in request.FILES:
             return Response(
@@ -154,10 +144,10 @@ class HolidayViewSet(viewsets.ModelViewSet):
         from apps.holidays.models import HolidayUpload
         from apps.ai_services.services import GeminiOCRService
         
-        # Create upload record (saves image to MEDIA_ROOT automatically)
+        # Create upload record
         upload_record = HolidayUpload.objects.create(
             uploaded_by=request.user,
-            image=image_file,  # Django saves this to MEDIA_ROOT/holiday_uploads/YYYY/MM/
+            image=image_file,
             extraction_status='PENDING'
         )
         
