@@ -1,24 +1,28 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-# Import from the new package structure
-from apps.organization.views.v1 import EmployeeViewSetV1, DepartmentViewSetV1
-from apps.organization.views.v2 import EmployeeViewSetV2, DepartmentViewSetV2
+# Import from standard views.py
+from apps.organization.views import (
+    EmployeeSoftDeleteViewSet,
+    DepartmentSoftDeleteViewSet,
+    EmployeeHardDeleteViewSet,
+    DepartmentHardDeleteViewSet
+)
 
-# --- V1 Router (Hard Delete) ---
-router_v1 = DefaultRouter()
-router_v1.register(r'employees', EmployeeViewSetV1, basename='employee-v1')
-router_v1.register(r'departments', DepartmentViewSetV1, basename='department-v1')
+# --- Soft Delete Router (Default) ---
+router_soft = DefaultRouter()
+router_soft.register(r'employees', EmployeeSoftDeleteViewSet, basename='employee-soft')
+router_soft.register(r'departments', DepartmentSoftDeleteViewSet, basename='department-soft')
 
-# --- V2 Router (Soft Delete) ---
-router_v2 = DefaultRouter()
-router_v2.register(r'employees', EmployeeViewSetV2, basename='employee-v2')
-router_v2.register(r'departments', DepartmentViewSetV2, basename='department-v2')
+# --- Hard Delete Router ---
+router_hard = DefaultRouter()
+router_hard.register(r'employees', EmployeeHardDeleteViewSet, basename='employee-hard')
+router_hard.register(r'departments', DepartmentHardDeleteViewSet, basename='department-hard')
 
 urlpatterns = [
-    # V1: http://localhost:8000/api/employees/v1/employees/
-    path('v1/', include(router_v1.urls)),
+    # Soft Delete (Default): /api/organization/employees/, /api/organization/departments/
+    path('', include(router_soft.urls)),
 
-    # V2: http://localhost:8000/api/employees/v2/employees/
-    path('v2/', include(router_v2.urls)),
+    # Hard Delete: /api/organization/employees/hard/, /api/organization/departments/hard/
+    path('hard/', include(router_hard.urls)),
 ]
