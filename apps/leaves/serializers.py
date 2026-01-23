@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.db.models import Q
 from datetime import date
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from apps.base.serializers import BaseTemplateSerializer
 from apps.base.utils import calculate_working_days, is_weekend, is_holiday, get_non_working_days_info, get_employee_profile
 from apps.leaves.models import LeaveRequest, LeaveBalance
@@ -73,6 +75,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         # CRITICAL: 'status' is now Read-Only by default
         read_only_fields = ['employee', 'action_by_details', 'status', 'rejection_reason', 'non_working_days_info']
     
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_non_working_days_info(self, obj):
         """
         Get information about holidays and weekends in the leave period.
@@ -321,11 +324,12 @@ class LeaveActionSerializer(serializers.ModelSerializer):
 class BulkLeaveRequestSerializer(serializers.Serializer):
     """
     Serializer for bulk leave application.
-    Accepts a list of leave requests and creates them individually.
+    Accepts a list of leave requests.
+    Validation is handled per-item in the view to support partial success.
     Maximum 5 requests per bulk submission.
     """
     requests = serializers.ListField(
-        child=LeaveRequestSerializer(),
+        child=serializers.DictField(), # Permissive to allow partial success handling in view
         allow_empty=False,
         min_length=1,
         max_length=5,
@@ -336,7 +340,7 @@ class BulkLeaveRequestSerializer(serializers.Serializer):
 class BulkLeaveSuccessSerializer(serializers.Serializer):
     """Serializer for successful leave request creation in bulk operation."""
     index = serializers.IntegerField(help_text="Index of the request in the original list")
-    id = serializers.IntegerField(help_text="ID of the created leave request")
+    id = serializers.UUIDField(help_text="UUID of the created leave request")
     dates = serializers.CharField(help_text="Date range of the leave")
     leave_type = serializers.CharField(help_text="Type of leave")
     status = serializers.CharField(help_text="Status of the leave request")

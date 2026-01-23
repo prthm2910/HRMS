@@ -10,7 +10,8 @@ from apps.base.views import (
     BaseReadOnlyAuthenticatedViewSet,
     BaseRoleFilteredViewSet,
     BaseRoleFilteredReadOnlyViewSet,
-    AdminWritePermissionMixin
+    AdminWritePermissionMixin,
+    BaseCreateOnlyAuthenticatedViewSet
 )
 from apps.leaves.models import LeaveRequest, LeaveBalance
 from apps.leaves.serializers import (
@@ -22,6 +23,7 @@ from apps.leaves.serializers import (
     BulkLeaveResponseSerializer
 )
 
+@extend_schema(tags=['leaves'])
 class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
     """
     View to check remaining leaves. 
@@ -40,6 +42,7 @@ class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
         ).distinct().order_by('employee__user__first_name')
 
 
+@extend_schema(tags=['leaves'])
 class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for employees to see their own leave requests.
@@ -62,6 +65,7 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         return queryset.order_by('-created_at')
 
 
+@extend_schema(tags=['leaves'])
 class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for managers to see leave requests from their subordinates.
@@ -86,6 +90,7 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         return queryset.order_by('-created_at')
 
 
+@extend_schema(tags=['leaves'])
 class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
@@ -332,12 +337,13 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
             serializer.save()
 
 
-@extend_schema(tags=['Leave Requests'])
-class BulkLeaveApplyViewSet(BaseAuthenticatedViewSet):
+@extend_schema(tags=['leaves'])
+class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
     """
     ViewSet for bulk leave application.
     Allows submitting up to 5 leave requests at once.
     """
+    queryset = LeaveRequest.objects.none()  # Satisfy drf-spectacular introspection
     serializer_class = BulkLeaveRequestSerializer
     
     @extend_schema(
@@ -345,8 +351,7 @@ class BulkLeaveApplyViewSet(BaseAuthenticatedViewSet):
         responses={201: BulkLeaveResponseSerializer, 400: BulkLeaveResponseSerializer},
         description="Submit multiple leave requests at once (max 5). Returns partial success with detailed results."
     )
-    @action(detail=False, methods=['post'], url_path='apply')
-    def bulk_apply(self, request):
+    def create(self, request):
         """
         Bulk leave application endpoint.
         Creates multiple leave requests and returns partial success.

@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.response import Response
 from apps.base.utils import get_employee_profile
 
@@ -56,6 +56,13 @@ class BaseAuthenticatedViewSet(viewsets.ModelViewSet):
     """
     Base viewset requiring authentication for all operations.
     Use for standard authenticated CRUD operations.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class BaseCreateOnlyAuthenticatedViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """
+    Base viewset for create-only operations requiring authentication.
     """
     permission_classes = [permissions.IsAuthenticated]
 
