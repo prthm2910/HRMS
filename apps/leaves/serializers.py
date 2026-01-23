@@ -47,15 +47,6 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     # Nested employee for GET requests
     employee = EmployeeBasicSerializer(read_only=True)
     
-    # employee_id for POST/PUT/PATCH requests (optional since it's auto-set from request.user)
-    employee_id = serializers.PrimaryKeyRelatedField(
-        queryset=Employee.objects.all(),
-        source='employee',
-        write_only=True,
-        required=False,
-        allow_null=True
-    )
-    
     # Nested serializer for action_by field to show employee details
     action_by_details = EmployeeBasicSerializer(
         source='action_by',
@@ -71,7 +62,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     class Meta:
         model = LeaveRequest
         fields = BaseTemplateSerializer.Meta.fields + [
-            'employee', 'employee_id',
+            'employee',
             'leave_type', 'start_date', 'end_date', 'reason',
             'status', 'rejection_reason', 
             'action_by_details',
