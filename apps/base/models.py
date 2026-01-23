@@ -1,31 +1,39 @@
 from django.db import models
 import uuid
-# Create your models here.
-# ------------------------------------------------------------------
-# CONCEPT: Abstract Base Classes (Don't Repeat Yourself)
-# ------------------------------------------------------------------
+
+# ==============================================================================
+# BASE ARCHITECTURE MODELS
+# ==============================================================================
+
 class BaseTemplateModel(models.Model):
     """
-    A foundational model that provides common fields for ALL other models.
+    1. FIRST PRINCIPLES: The "Universal Blueprint"
+    Think of 'BaseTemplateModel' as the DNA or the universal blueprint for 
+    every record in your HRMS (Employees, Departments, Leaves). Instead of 
+    re-inventing the wheel for every table, we define the "commonalities" 
+    here once and let everyone else inherit them.
+
+    2. TECHNICAL BREAKDOWN:
+    - id (UUID): A globally unique identifier. Unlike simple numbers (1, 2, 3), 
+      UUIDs are impossible to guess, which stops "Enumeration Attacks."
+    - Audit Fields: 'created_at' (the birth certificate) and 'updated_at' 
+      (the last modification log) update themselves automatically.
+    - Soft Delete: We use 'is_deleted' instead of actual deletion. This 
+      keeps historical data safe in the database but hides it from the user.
+    - abstract = True: Tells Django not to create a database table for this. 
+      It only exists to be a parent for other models.
     """
     
-    # 1. Security & Scalability: UUID
-    # Why? Unlike integers (1, 2, 3), UUIDs (e.g., a1b2-c3d4...) are hard to guess.
-    # This prevents "ID Enumeration Attacks" where a hacker guesses /users/5, /users/6.
+    # 1. Unique Identification
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    # 2. Audit Trails (Time Tracking)
-    # auto_now_add=True: Sets the time ONLY when created.
-    # auto_now=True: Updates the time EVERY time you save.
+    # 2. Automatic Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # 3. Soft Delete Pattern
-    # Instead of actually deleting data (SQL DELETE), we just hide it (is_deleted=True).
-    # This is critical for HR systems to maintain historical records.
+    # 3. Activation & Soft Delete
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
 
     class Meta:
-        abstract = True # CRITICAL: This tells Django "Don't make a table for this class".
-                        # Only make tables for models that INHERIT from this.
+        abstract = True

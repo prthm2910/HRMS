@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from apps.organization.models import Employee
-from apps.leaves.models import LeaveBalance, LeaveRequest
+from apps.leaves.models import LeaveBalance, LeaveRequest, LeaveType
 from django.db.models import F
 
 # --- 1. Auto-Create Balances for New Employees ---
@@ -16,7 +16,7 @@ def create_leave_balances(sender, instance, created, **kwargs):
         }
 
         balances = []
-        for code, label in LeaveRequest.LEAVE_TYPE_CHOICES:
+        for code, label in LeaveType.choices:
             balances.append(
                 LeaveBalance(
                     employee=instance,

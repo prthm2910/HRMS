@@ -25,8 +25,50 @@ from hrms.config.utils import get_db_config, get_simple_jwt_config
 # ==============================================================================
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+"""
+This line sets up the base directory of your Django project - essentially the "root folder" where your entire project lives.
+
+Breaking it down step by step:
+
+Path(__file__): This gets the absolute path to the current file (settings.py). (Line - 15 : Contains the Path import statement )
+
+.resolve(): This resolves any symbolic links (like shortcuts) to get the actual, physical location of the file on your hard drive.
+
+.parent: This goes up one level in the directory structure. Since settings.py is inside the hrms/ directory, .parent points to the directory *above* hrms/.
+
+.parent: This goes up another level. So, if hrms/ is at D:/ET Projects V1/hrms/hrms/, this points to D:/ET Projects V1/hrms/.
+
+So, BASE_DIR ends up being the directory that contains your main hrms/ folder and your env/ folder.
+
+Why do we need this?
+Django needs to know where to find important files like your .env file (which contains sensitive passwords and keys), your templates, static files, and media files. By setting BASE_DIR, you give Django a reliable starting point to locate everything, no matter where you run the manage.py commands from.
+"""
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+"""
+This sets up an environment variable manager using django-environ.
+Think of it as a smart configuration reader that pulls settings from your .env file.
+
+Breaking it down:
+
+environ.Env(...): Creates the reader object and defines a "schema" (rules) for your variables.
+
+DEBUG=(bool, False): 
+- Expected type: bool (True/False).
+- Default: False if not found in .env.
+- Why? Environment variables are always strings ("True"). This automatically converts the string "True" to the Python boolean True.
+
+ALLOWED_HOSTS=(list, []):
+- Expected type: list.
+- Default: [] (empty list).
+- Why? Converts comma-separated strings (like "localhost,myapp.com") into a proper Python list.
+
+CORS_ALLOWED_ORIGINS=(list, []): Same as above, used to control which websites can call your API.
+
+Why do we do this?
+It provides "type safety" Instead of manually converting strings and handling missing variables, django-environ does it for you. This keeps your settings clean and your application secure by separating secrets (in .env) from code.
+"""
 # Initialize environment variables
 env = environ.Env(
     # Set default values and casting types
@@ -36,7 +78,23 @@ env = environ.Env(
 )
 
 # Read the .env file
-# Points to the directory containing the .env file (adjusted relative to settings.py)
+"""
+1. FIRST PRINCIPLES: "Opening the Secret Envelope"
+Imagine you are writing a letter with super-sensitive information. You don't leave 
+it on your desk; you put it in a sealed envelope and hide it in a secret location 
+outside your main folder. This step is where the app physically goes to that 
+secret location, opens the envelope, and reads the instructions inside.
+
+2. TECHNICAL BREAKDOWN:
+- os.path.join: A robust way to build file paths. It makes sure the path works 
+  perfectly whether your server is running on Windows or Linux.
+- BASE_DIR.parent: This tells the code to look in the folder *above* the main 
+  project directory. This is a security feature to keep your secret passwords 
+  completely separate from your application code.
+- environ.Env.read_env(env_file_path): This command specifically tells the 
+  'environ' reader to parse the '.env' file at that path and load its contents 
+  into the system environment so the app can use variables like DB_PASSWORD.
+"""
 env_file_path = os.path.join(BASE_DIR.parent, 'env/hrms_env/.env')
 environ.Env.read_env(env_file_path)
 
@@ -45,7 +103,18 @@ environ.Env.read_env(env_file_path)
 # ==============================================================================
 # 2. SECURITY SETTINGS
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "Lock and Shield"
+Every app needs a lock (SECRET_KEY) to keep data safe from tampering, and a 
+shield (DEBUG) to hide your private internal blueprints from the public.
 
+2. TECHNICAL BREAKDOWN:
+- SECRET_KEY: A unique string used for cryptographic signing. It ensures things 
+  like login session cookies cannot be faked.
+- DEBUG: A boolean development switch. If True, you see the "Yellow Page" 
+  error reports. If False, specific security headers are enabled and 
+  exposed errors are silenced.
+"""
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
@@ -53,25 +122,55 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = env('DEBUG')
 
 # In production, this should be a comma-separated list of domains in your .env
+"""
+1. FIRST PRINCIPLES: The "Guest List"
+Imagine your app is a private party. 'ALLOWED_HOSTS' is the guest list at the 
+front door. Even if a stranger knows the address, the guard won't let them in 
+unless their name (the domain name) is on this specific list.
+
+2. TECHNICAL BREAKDOWN:
+- env.list(): Tells our reader to take a comma-separated string from the '.env' 
+  file (like "localhost,127.0.0.1") and convert it into a Python List.
+- Security: This prevents 'Host Header Attacks' by ensuring your app only 
+  responds to requests intended for your specific domains.
+"""
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 
 # ==============================================================================
 # 3. INSTALLED APPS
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "Lego Blocks"
+A Django project is built by plugging in different modules (Apps). Some are 
+provided by Django, some by other developers, and some are built by us.
 
-
+2. TECHNICAL BREAKDOWN:
+- DJANGO_APPS: Native modules (admin, auth, contenttypes).
+- THIRD_PARTY_APPS: External libraries (rest_framework, corsheaders).
+- LOCAL_APPS: Domain-specific modules for this HRMS (users, organization, leaves).
+We combine them into 'INSTALLED_APPS' so Django knows to activate their models, 
+views, and URLs.
+"""
 THIRD_PARTY_APPS = THIRD_PARTY_APPS
-
 LOCAL_APPS = LOCAL_APPS
-
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 
 # ==============================================================================
 # 4. MIDDLEWARE
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "Checkpoint / Filter System"
+Imagine every message coming into your app has to pass through a series of guards. 
+One verifies the identity, one checks for security threats, one logs the time. 
+Middleware processes every request BEFORE it reaches your logic.
 
+2. TECHNICAL BREAKDOWN:
+- MIDDLEWARE is a list of classes. Django processes them sequentially for 
+  requests and in reverse for responses.
+- It handles cross-cutting concerns like Authentication, CORS, and Gzip compression.
+"""
 MIDDLEWARE = DJANGO_DEFAULT_MIDDLEWARE + LOCAL_MIDDLEWARE
 
 ROOT_URLCONF = 'hrms.urls'
@@ -82,10 +181,19 @@ WSGI_APPLICATION = 'hrms.wsgi.application'
 
 
 # ==============================================================================
-# 5. DATABASE
+# 5. DATABASE & IDENTITY
 # ==============================================================================
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+"""
+1. FIRST PRINCIPLES: The "Filing Cabinet & Badge System"
+DATABASES is where your records (Employees, Leaves) are stored permanently. 
+AUTH_USER_MODEL is the blueprint for who is allowed to enter the office.
 
+2. TECHNICAL BREAKDOWN:
+- get_db_config(env): Fetches variables (HOST, PORT, USER) to connect to PostgreSQL.
+- AUTH_USER_MODEL: Overrides Django's default User with our custom implementation 
+  to support UUID IDs and extra fields like 'bio'.
+"""
 DATABASES = get_db_config(env)
 
 # Custom User Model
@@ -104,7 +212,19 @@ AUTH_PASSWORD_VALIDATORS = DJANGO_AUTH_PASSWORD_VALIDATORS
 # 7. INTERNATIONALIZATION
 # ==============================================================================
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
+"""
+1. FIRST PRINCIPLES: The "Global Clock & Translator"
+HRMS systems have users in different places. We need a standard way to 
+track time so no one misses a leave request because of a time zone mix-up.
 
+2. TECHNICAL BREAKDOWN:
+- USE_I18N = True: (Short for Internationalization). This turns on Django's 
+  translation system. It allows you to mark text for translation so your 
+  HRMS could be shown in French, Spanish, or Hindi without changing the code.
+- USE_TZ = True: Django stores all datetimes in the database as UTC (Coordinated Universal Time).
+- TIME_ZONE = 'UTC': The default internal timezone for the server.
+- LANGUAGE_CODE: Sets the default text locale; here, US English.
+"""
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -115,7 +235,18 @@ USE_TZ = True
 # 8. STATIC & MEDIA FILES
 # ==============================================================================
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
+"""
+1. FIRST PRINCIPLES: "Tools vs. Materials"
+- STATIC: The tools the developers use to paint the house (CSS, Icons).
+- MEDIA: The photos and documents the residents bring in (Profile pics, Resumes).
+We keep them separate so user-uploaded files don't accidentally overwrite your important code.
 
+2. TECHNICAL BREAKDOWN:
+- STATIC_URL: The web link used to fetch static files.
+- MEDIA_ROOT: The specific folder on your hard drive where uploads are saved.
+- collectstatic: A command that gathers all static files from apps into STATIC_ROOT 
+  for production use.
+"""
 STATIC_URL = 'static/'
 
 # In production, run 'python manage.py collectstatic' to move files here
@@ -131,7 +262,16 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # ==============================================================================
 # 9. API CONFIGURATION (DRF & JWT)
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "Receptionist & ID Check"
+When other computers want to talk to your app (like a mobile app), they use an API. 
+Login tokens are like "Membership Cards" they show at the desk to prove who they are.
 
+2. TECHNICAL BREAKDOWN:
+- REST_FRAMEWORK: Sets the global rules (e.g., "Every request must pass an ID check").
+- SIMPLE_JWT: Configures the specific "Membership Card" (JWT) system.
+- SPECTACULAR: Automatically generates a "Map" (Swagger UI) of all your API offices.
+"""
 REST_FRAMEWORK = DRF_REST_FRAMEWORK
 
 SIMPLE_JWT = get_simple_jwt_config(env)
@@ -142,7 +282,17 @@ SPECTACULAR_SETTINGS = SPECTACULAR_CONFIG
 # ==============================================================================
 # 10. CORS CONFIGURATION
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "Security Fence"
+CORS is like a fence around your project. It stops random, unknown websites 
+from peeking into your API. You only open the gate for trusted partners.
 
+2. TECHNICAL BREAKDOWN:
+- CORS_ALLOW_ALL_ORIGINS: If True, any domain can call your API. We only do 
+  this in development (DEBUG=True).
+- CORS_ALLOWED_ORIGINS: In production, we explicitly list the 'white-listed' 
+  domains that are allowed access.
+"""
 # If True, allows any website to call your API (Development only)
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
@@ -154,5 +304,13 @@ if not DEBUG:
 # ==============================================================================
 # 11. GEMINI API CONFIGURATION (for OCR feature)
 # ==============================================================================
+"""
+1. FIRST PRINCIPLES: The "AI Access Card"
+To read text from images of holiday lists, we use Google's Gemini AI. This key 
+is the "Access Card" that lets our app talk to that AI "Brain."
 
+2. TECHNICAL BREAKDOWN:
+- GEMINI_API_KEY: Fetches the 'GOOGLE_API_KEY' from your secret .env file.
+- usage: Used primarily in 'apps/ai_services' for the holiday extraction feature.
+"""
 GEMINI_API_KEY = env('GOOGLE_API_KEY', default='')
