@@ -1,5 +1,6 @@
 from datetime import date
 from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
@@ -16,7 +17,9 @@ from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
     LeaveUpdateSerializer, 
-    LeaveActionSerializer
+    LeaveActionSerializer,
+    BulkLeaveRequestSerializer,
+    BulkLeaveResponseSerializer
 )
 
 class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
@@ -327,3 +330,76 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
                 serializer.save()
         else:
             serializer.save()
+
+
+@extend_schema(tags=['Leave Requests'])
+class BulkLeaveApplyViewSet(BaseAuthenticatedViewSet):
+    """
+    ViewSet for bulk leave application.
+    Allows submitting up to 5 leave requests at once.
+    """
+    serializer_class = BulkLeaveRequestSerializer
+    
+    @extend_schema(
+        request=BulkLeaveRequestSerializer,
+        responses={201: BulkLeaveResponseSerializer, 400: BulkLeaveResponseSerializer},
+        description="Submit multiple leave requests at once (max 5). Returns partial success with detailed results."
+    )
+    @action(detail=False, methods=['post'], url_path='apply')
+    def bulk_apply(self, request):
+        """
+        Bulk leave application endpoint.
+        Creates multiple leave requests and returns partial success.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        successful_requests = []
+        failed_requests = []
+        
+        for idx, leave_data in enumerate(serializer.validated_data['requests']):
+            try:
+                leave_serializer = LeaveRequestSerializer(
+                    data=leave_data,
+                    context={'request': request}
+                )
+                
+                if leave_serializer.is_valid():
+                    leave_request = leave_serializer.save()
+                    successful_requests.append({
+                        'index': idx,
+                        'id': leave_request.id,
+                        'dates': f"{leave_request.start_date} to {leave_request.end_date}",
+                        'leave_type': leave_request.leave_type,
+                        'status': leave_request.status
+                    })
+                else:
+                    failed_requests.append({
+                        'index': idx,
+                        'data': leave_data,
+                        'errors': leave_serializer.errors
+                    })
+                    
+            except Exception as e:
+                failed_requests.append({
+                    'index': idx,
+                    'data': leave_data,
+                    'errors': {'error': str(e)}
+                })
+        
+        response_data = {
+            'successful': successful_requests,
+            'failed': failed_requests,
+            'summary': {
+                'total': len(serializer.validated_data['requests']),
+                'successful': len(successful_requests),
+                'failed': len(failed_requests)
+            }
+        }
+        
+        # Use response serializer for consistent output
+        response_serializer = BulkLeaveResponseSerializer(data=response_data)
+        response_serializer.is_valid(raise_exception=True)
+        
+        status_code = status.HTTP_201_CREATED if successful_requests else status.HTTP_400_BAD_REQUEST
+        return Response(response_serializer.validated_data, status=status_code)
