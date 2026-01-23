@@ -4,7 +4,8 @@ from .views import (
     MyLeaveRequestViewSet,
     SubordinateLeaveRequestViewSet,
     LeaveApplyViewSet,
-    LeaveBalanceViewSet
+    LeaveBalanceViewSet,
+    BulkLeaveApplyViewSet
 )
 
 # Create a router and register our viewsets with it.
@@ -25,6 +26,10 @@ router.register('apply', LeaveApplyViewSet, basename='leave-apply')
 # 4. Endpoint: /api/leaves/balance/
 # (GET list of remaining leaves)
 router.register('balance', LeaveBalanceViewSet, basename='leave-balance')
+
+# 5. Endpoint: /api/leaves/bulk/apply/
+# (POST to submit multiple leave requests at once)
+router.register('bulk', BulkLeaveApplyViewSet, basename='bulk-leave')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -316,3 +316,49 @@ class LeaveActionSerializer(serializers.ModelSerializer):
         if value not in ['APPROVED', 'REJECTED']:
             raise serializers.ValidationError("Managers can only set status to APPROVED or REJECTED.")
         return value
+
+
+class BulkLeaveRequestSerializer(serializers.Serializer):
+    """
+    Serializer for bulk leave application.
+    Accepts a list of leave requests and creates them individually.
+    Maximum 5 requests per bulk submission.
+    """
+    requests = serializers.ListField(
+        child=LeaveRequestSerializer(),
+        allow_empty=False,
+        min_length=1,
+        max_length=5,
+        help_text="List of leave requests to create (max 5)"
+    )
+
+
+class BulkLeaveSuccessSerializer(serializers.Serializer):
+    """Serializer for successful leave request creation in bulk operation."""
+    index = serializers.IntegerField(help_text="Index of the request in the original list")
+    id = serializers.IntegerField(help_text="ID of the created leave request")
+    dates = serializers.CharField(help_text="Date range of the leave")
+    leave_type = serializers.CharField(help_text="Type of leave")
+    status = serializers.CharField(help_text="Status of the leave request")
+
+
+class BulkLeaveFailureSerializer(serializers.Serializer):
+    """Serializer for failed leave request creation in bulk operation."""
+    index = serializers.IntegerField(help_text="Index of the request in the original list")
+    data = serializers.DictField(help_text="Original request data that failed")
+    errors = serializers.DictField(help_text="Validation errors")
+
+
+class BulkLeaveSummarySerializer(serializers.Serializer):
+    """Serializer for bulk operation summary."""
+    total = serializers.IntegerField(help_text="Total number of requests submitted")
+    successful = serializers.IntegerField(help_text="Number of successfully created requests")
+    failed = serializers.IntegerField(help_text="Number of failed requests")
+
+
+class BulkLeaveResponseSerializer(serializers.Serializer):
+    """Serializer for bulk leave application response."""
+    successful = BulkLeaveSuccessSerializer(many=True)
+    failed = BulkLeaveFailureSerializer(many=True)
+    summary = BulkLeaveSummarySerializer()
+
