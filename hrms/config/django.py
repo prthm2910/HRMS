@@ -63,4 +63,5 @@ LOCAL_APPS = [
     'apps.base.apps.BaseConfig',
     'apps.ai_services.apps.AiServicesConfig',  # AI services (OCR, NLP, etc.)
     'apps.holidays.apps.HolidaysConfig',
+    'apps.teams.apps.TeamsConfig',
 ]
