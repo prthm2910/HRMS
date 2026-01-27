@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import (
      TokenObtainPairView,
      TokenRefreshView,
 )
-from apps.users.views import RegisterView, UserProfileView
+from apps.users.views import  UserProfileView
 
 urlpatterns = [
     # Login Endpoint (Get Access + Refresh Token)
