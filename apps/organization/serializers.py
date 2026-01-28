@@ -45,6 +45,7 @@ class EmployeeSerializer(BaseTemplateSerializer):
     # Nested objects for GET requests
     department = DepartmentBasicSerializer(read_only=True)
     manager = EmployeeBasicSerializer(read_only=True)
+    direct_reports_count = serializers.IntegerField(read_only=True)
 
     # --- WRITE ONLY (Input for User Creation) ---
     user_first_name = serializers.CharField(write_only=True, required=False)
@@ -83,13 +84,14 @@ class EmployeeSerializer(BaseTemplateSerializer):
             # Relations (Nested for GET, _id for POST/PUT/PATCH)
             'department', 'department_id',
             'manager', 'manager_id',
+            'direct_reports_count',
             
             # Job Details
             'designation', 'employment_type', 'salary',
             'date_of_joining', 'date_of_birth',
         ]
         # CRITICAL: employee_id is now strictly read-only
-        read_only_fields = ['employee_id']
+        read_only_fields = ['employee_id', 'direct_reports_count']
 
     def create(self, validated_data):
         # Extract user data
