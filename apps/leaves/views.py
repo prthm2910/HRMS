@@ -349,7 +349,69 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
     @extend_schema(
         request=BulkLeaveRequestSerializer,
         responses={201: BulkLeaveResponseSerializer, 400: BulkLeaveResponseSerializer},
-        description="Submit multiple leave requests at once (max 5). Returns partial success with detailed results."
+        examples=[
+            OpenApiExample(
+                'Bulk Leave Application',
+                description='Submit multiple leave requests at once (max 5 requests)',
+                value={
+                    "requests": [
+                        {
+                            "leave_type": "CASUAL",
+                            "start_date": "2026-02-10",
+                            "end_date": "2026-02-12",
+                            "reason": "Family function",
+                            "is_half_day": False
+                        },
+                        {
+                            "leave_type": "SICK",
+                            "start_date": "2026-03-05",
+                            "end_date": "2026-03-05",
+                            "reason": "Medical appointment",
+                            "is_half_day": True,
+                            "half_day_period": "FIRST_HALF"
+                        },
+                        {
+                            "leave_type": "EARNED",
+                            "start_date": "2026-04-15",
+                            "end_date": "2026-04-18",
+                            "reason": "Vacation",
+                            "is_half_day": False
+                        }
+                    ]
+                },
+                request_only=True,
+            ),
+        ],
+        description="""
+        **Submit multiple leave requests at once (max 5)**
+        
+        **Request Body Structure:**
+        ```json
+        {
+          "requests": [
+            {
+              "leave_type": "CASUAL|SICK|EARNED|UNPAID",
+              "start_date": "YYYY-MM-DD",
+              "end_date": "YYYY-MM-DD",
+              "reason": "string",
+              "is_half_day": true|false,
+              "half_day_period": "FIRST_HALF|SECOND_HALF" (required if is_half_day=true)
+            }
+          ]
+        }
+        ```
+        
+        **Response:**
+        - Returns partial success with detailed results for each request
+        - `successful`: Array of successfully created leave requests
+        - `failed`: Array of failed requests with validation errors
+        - `summary`: Total, successful, and failed counts
+        
+        **Validation:**
+        - Each request is validated independently
+        - Failed requests don't prevent successful ones from being created
+        - Same validation rules apply as single leave requests
+        """
     )
     def create(self, request):
         """
