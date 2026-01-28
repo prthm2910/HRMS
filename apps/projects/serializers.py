@@ -77,22 +77,35 @@ class ProjectSerializer(BaseTemplateSerializer):
     
     def validate(self, attrs):
         user = self.context['request'].user
+        request = self.context.get('request')
         
-        # 1. HOD Logic
+        # 1. HOD Logic: Auto-fill department, prevent cross-department creation
         if hasattr(user, 'employee_profile') and hasattr(user.employee_profile, 'hod_profile'):
             hod_dept = user.employee_profile.hod_profile.department
-            target_dept = attrs.get('department')
             
-            # If not provided, auto-fill
-            if not target_dept:
-                attrs['department'] = hod_dept
-            # If provided, ensure it matches
-            elif target_dept != hod_dept:
-                raise serializers.ValidationError({"department": "You cannot create a project in another department."})
+            # If HOD tries to specify a department
+            if 'department' in request.data:
+                target_dept = attrs.get('department')
+                # Reject if trying to create in another department
+                if target_dept and target_dept != hod_dept:
+                    raise serializers.ValidationError({
+                        "department": f"You can only create projects in your own department ({hod_dept.name}). Department field should not be specified."
+                    })
+            
+            # Always auto-fill with HOD's department
+            attrs['department'] = hod_dept
         
-        # 2. Admin Logic
+        # 2. Admin Logic: Must specify department
         elif user.is_superuser:
             if not attrs.get('department'):
-                raise serializers.ValidationError({"department": "This field is required for Administrators."})
+                raise serializers.ValidationError({
+                    "department": "This field is required for Administrators. Please specify which department this project belongs to."
+                })
+        
+        # 3. Regular employees cannot create projects (handled by permissions)
+        else:
+            raise serializers.ValidationError({
+                "detail": "Only Administrators and HODs can create projects."
+            })
 
         return attrs

@@ -1,18 +1,20 @@
 from rest_framework import filters 
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 from apps.base.views import BaseRoleFilteredViewSet, SoftDeleteMixin, HardDeleteMixin
 from apps.projects.models import Project, ProjectMember
 from apps.projects.serializers import ProjectSerializer, ProjectMemberSerializer
 from apps.projects.permissions import IsProjectAdminOrHODOrReadOnly
 
 
+@extend_schema(tags=['projects'])
 class ProjectViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
     """
     ViewSet for managing Projects.
     Access:
-    - Admin: Full Access.
-    - HOD: Full Access to Projects in their Department.
-    - Employee: View Projects they are a member of.
+    - Admin: Full Access to all projects. Must specify department when creating.
+    - HOD: Full Access to Projects in their Department. Department is auto-detected.
+    - Employee: View Projects they are a member of. Cannot create projects.
     """
     queryset = Project.objects.filter(is_deleted=False)
     serializer_class = ProjectSerializer
@@ -30,6 +32,7 @@ class ProjectViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
         # 2. Employee Logic: Return projects where they are a member
         return self.queryset.filter(members__employee=employee_profile).distinct()
 
+@extend_schema(tags=['projects'])
 class ProjectMemberViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
     """
     ViewSet for managing Project Members.
