@@ -65,13 +65,12 @@ class ProjectSerializer(BaseTemplateSerializer):
         write_only=True
     )
     
-    project_type_display = serializers.CharField(source='get_project_type_display', read_only=True)
 
     class Meta:
         model = Project
         fields = BaseTemplateSerializer.Meta.fields + [
             'department', 'department_details', 'name', 'description', 
-            'project_type', 'project_type_display', 'start_date', 'end_date', 
+            'project_type', 'start_date', 'end_date', 
             'parent_project', 'parent_project_details', 'members'
         ]
     
@@ -107,5 +106,44 @@ class ProjectSerializer(BaseTemplateSerializer):
             raise serializers.ValidationError({
                 "detail": "Only Administrators and HODs can create projects."
             })
+        
+        # 4. Duplicate Project Validation
+        project_name = attrs.get('name')
+        department = attrs.get('department')
+        parent_project = attrs.get('parent_project')
+        
+        if project_name and department:
+            # Check for duplicate name within the same department
+            duplicate_query = Project.objects.filter(
+                name__iexact=project_name,  # Case-insensitive match
+                department=department,
+                is_deleted=False
+            )
+            
+            # Exclude current instance if updating
+            if self.instance:
+                duplicate_query = duplicate_query.exclude(id=self.instance.id)
+            
+            if duplicate_query.exists():
+                raise serializers.ValidationError({
+                    "name": f"A project with the name '{project_name}' already exists in the {department.name} department."
+                })
+            
+            # Check for duplicate name with the same parent project
+            if parent_project:
+                duplicate_parent_query = Project.objects.filter(
+                    name__iexact=project_name,
+                    parent_project=parent_project,
+                    is_deleted=False
+                )
+                
+                # Exclude current instance if updating
+                if self.instance:
+                    duplicate_parent_query = duplicate_parent_query.exclude(id=self.instance.id)
+                
+                if duplicate_parent_query.exists():
+                    raise serializers.ValidationError({
+                        "name": f"A project with the name '{project_name}' already exists under the parent project '{parent_project.name}'."
+                    })
 
         return attrs
