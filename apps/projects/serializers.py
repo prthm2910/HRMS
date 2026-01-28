@@ -145,5 +145,24 @@ class ProjectSerializer(BaseTemplateSerializer):
                     raise serializers.ValidationError({
                         "name": f"A project with the name '{project_name}' already exists under the parent project '{parent_project.name}'."
                     })
+        
+        # 5. Parent-Child Project Date Validation
+        if parent_project:
+            start_date = attrs.get('start_date')
+            end_date = attrs.get('end_date')
+            
+            # Validate start date
+            if start_date and parent_project.start_date:
+                if start_date < parent_project.start_date:
+                    raise serializers.ValidationError({
+                        "start_date": f"Sub-project start date cannot be before parent project start date ({parent_project.start_date})."
+                    })
+            
+            # Validate end date (only if parent has an end date)
+            if end_date and parent_project.end_date:
+                if end_date > parent_project.end_date:
+                    raise serializers.ValidationError({
+                        "end_date": f"Sub-project end date cannot be after parent project end date ({parent_project.end_date})."
+                    })
 
         return attrs
