@@ -9,7 +9,8 @@ from apps.base.views import (
     BaseRoleFilteredViewSet,
     BaseRoleFilteredReadOnlyViewSet,
     AdminWritePermissionMixin,
-    BaseCreateOnlyAuthenticatedViewSet
+    BaseCreateOnlyAuthenticatedViewSet,
+    DeleteMixin
 )
 from apps.leaves.models import LeaveRequest, LeaveBalance
 from apps.leaves.serializers import (
@@ -21,7 +22,7 @@ from apps.leaves.serializers import (
     BulkLeaveResponseSerializer
 )
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Leave Balance'])
 class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
     """
     View to check remaining leaves. 
@@ -40,7 +41,7 @@ class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
         ).distinct().order_by('employee__user__first_name')
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['My Leave Requests'])
 class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for employees to see their own leave requests.
@@ -63,7 +64,7 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         return queryset.order_by('-created_at')
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Subordinate Leave Requests'])
 class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for managers to see leave requests from their subordinates.
@@ -88,8 +89,8 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         return queryset.order_by('-created_at')
 
 
-@extend_schema(tags=['leaves'])
-class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
+@extend_schema(tags=['Leave Requests'])
+class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
@@ -335,7 +336,7 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
             serializer.save()
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Bulk Leave Requests'])
 class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
     """
     ViewSet for bulk leave application.
