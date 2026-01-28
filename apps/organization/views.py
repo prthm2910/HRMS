@@ -9,11 +9,32 @@ from apps.base.views import (
     BaseReadAuthWriteAdminViewSet, 
     SoftDeleteMixin, 
     AdminWritePermissionMixin,
-    BaseRoleFilteredViewSet
+    BaseRoleFilteredViewSet,
+    HardDeleteMixin
 )
-from apps.organization.models import Employee, Department
-from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer
+from apps.organization.models import Employee, Department, HOD
+from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer, HODSerializer
 
+
+class HODViewSet(HardDeleteMixin, AdminWritePermissionMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
+    """
+    ViewSet for managing Heads of Department.
+    Access:
+    - Admin: Full Access.
+    - HOD: View Self only.
+    - Write Operations: Admin only.
+    """
+    queryset = HOD.objects.filter(is_deleted=False)
+    serializer_class = HODSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['department', 'employee']
+    search_fields = ['employee__user__username', 'department__name']
+    ordering_fields = ['created_at']
+    admin_forbidden_message = "Forbidden: Only Administrators can manage HOD assignments."
+
+    def get_standard_user_queryset(self, employee_profile):
+        # Regular users can only see their own HOD record if they are one
+        return self.queryset.filter(employee=employee_profile)
 
 @extend_schema(tags=['Departments'])
 class DepartmentViewSet(SoftDeleteMixin, BaseReadAuthWriteAdminViewSet):

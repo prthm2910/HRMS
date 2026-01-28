@@ -105,3 +105,27 @@ class Employee(BaseTemplateModel):
         # but strictly checking immediate parent is the bare minimum.
         if self.manager and self.manager.manager == self:
             raise ValidationError("Circular reporting detected.")    
+
+class HOD(BaseTemplateModel):
+    """
+    Head of Department.
+    Links an Employee to a Department they manage.
+    """
+    department = models.OneToOneField(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='hod'
+    )
+    employee = models.OneToOneField(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='hod_profile'
+    )
+
+    def __str__(self):
+        return f"HOD: {self.employee.user.username} - {self.department.name}"
+
+    class Meta:
+        verbose_name = "Head of Department"
+        verbose_name_plural = "Heads of Department"
+        db_table = "hods"

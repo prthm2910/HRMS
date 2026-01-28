@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.base.serializers import BaseTemplateSerializer
-from apps.organization.models import Employee, Department
+from apps.organization.models import Employee, Department, HOD
 
 User = get_user_model()
 
@@ -142,3 +142,13 @@ class EmployeeSerializer(BaseTemplateSerializer):
             user.save()
 
         return super().update(instance, validated_data)
+
+class HODSerializer(BaseTemplateSerializer):
+    employee_details = EmployeeSerializer(source='employee', read_only=True)
+    department_details = DepartmentSerializer(source='department', read_only=True)
+
+    class Meta:
+        model = HOD
+        fields = BaseTemplateSerializer.Meta.fields + [
+            'employee', 'department', 'employee_details', 'department_details'
+        ]
