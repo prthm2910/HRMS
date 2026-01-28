@@ -1,14 +1,14 @@
 from rest_framework import filters 
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
-from apps.base.views import BaseRoleFilteredViewSet, SoftDeleteMixin, HardDeleteMixin
+from apps.base.views import BaseRoleFilteredViewSet, DeleteMixin
 from apps.projects.models import Project, ProjectMember
 from apps.projects.serializers import ProjectSerializer, ProjectMemberSerializer
 from apps.projects.permissions import IsProjectAdminOrHODOrReadOnly
 
 
-@extend_schema(tags=['projects'])
-class ProjectViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
+@extend_schema(tags=['Projects'])
+class ProjectViewSet(DeleteMixin, BaseRoleFilteredViewSet):
     """
     ViewSet for managing Projects.
     Access:
@@ -32,8 +32,8 @@ class ProjectViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
         # 2. Employee Logic: Return projects where they are a member
         return self.queryset.filter(members__employee=employee_profile).distinct()
 
-@extend_schema(tags=['projects'])
-class ProjectMemberViewSet(HardDeleteMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
+@extend_schema(tags=['Project Members'])
+class ProjectMemberViewSet(DeleteMixin, BaseRoleFilteredViewSet):
     """
     ViewSet for managing Project Members.
     Access:

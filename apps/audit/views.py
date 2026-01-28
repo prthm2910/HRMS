@@ -1,4 +1,3 @@
-from rest_framework import viewsets, permissions
 from apps.audit.models import AuditLog
 from apps.audit.serializers import AuditLogSerializer
 from apps.base.views import BaseReadOnlyAdminViewSet

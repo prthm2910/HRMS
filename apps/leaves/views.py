@@ -9,7 +9,8 @@ from apps.base.views import (
     BaseRoleFilteredViewSet,
     BaseRoleFilteredReadOnlyViewSet,
     AdminWritePermissionMixin,
-    BaseCreateOnlyAuthenticatedViewSet
+    BaseCreateOnlyAuthenticatedViewSet,
+    DeleteMixin
 )
 from apps.leaves.models import LeaveRequest, LeaveBalance
 from apps.leaves.serializers import (
@@ -88,8 +89,8 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         return queryset.order_by('-created_at')
 
 
-@extend_schema(tags=['leaves'])
-class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
+@extend_schema(tags=['Leave Requests'])
+class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave

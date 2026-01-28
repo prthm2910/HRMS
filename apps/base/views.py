@@ -4,33 +4,18 @@ from apps.base.utils import get_employee_profile
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 
-class SoftDeleteMixin:
+class DeleteMixin:
     """
-    Mixin to handle soft deletion of records.
-    Sets is_deleted=True and is_active=False instead of deleting from DB.
-    Also deactivates associated auth user if instance has a 'user' field.
-    """
-    def perform_destroy(self, instance):
-        instance.is_deleted = True
-        instance.is_active = False
-        instance.save()
-        
-        # Also deactivate associated user accounts if they exist (e.g. for Employee)
-        if hasattr(instance, 'user') and instance.user:
-            instance.user.is_active = False
-            instance.user.save()
-
-
-class HardDeleteMixin:
-    """
-    Mixin to allow permanent deletion if 'permanent=true' query param is present
-    and user is a superuser. Otherwise falls back to SoftDeleteMixin.
+    Mixin to handle both soft and hard deletion of records.
+    
+    Default behavior: Soft Delete (is_deleted=True, is_active=False)
+    Hard Delete: Superuser only + ?force=true query param
     """
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                name='permanent', 
-                description='Set to "true" to permanently delete the record from the database (Superuser only).', 
+                name='force', 
+                description='Set to "true" to permanently delete the record (Superuser only).', 
                 required=False, 
                 type=OpenApiTypes.BOOL,
                 location=OpenApiParameter.QUERY
@@ -38,16 +23,25 @@ class HardDeleteMixin:
         ]
     )
     def destroy(self, request, *args, **kwargs):
-        # We override destroy ONLY to attach the @extend_schema decorator.
-        # This makes the 'permanent' param visible in Swagger/Redoc.
-        # functional logic remains in perform_destroy.
         return super().destroy(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
-        if self.request.user.is_superuser and self.request.query_params.get('permanent') == 'true':
+        # check for force=true (new standard)
+        force = self.request.query_params.get('force') == 'true'
+        
+        # Hard Delete: Superuser + Flag
+        if self.request.user.is_superuser and force:
             instance.delete()
+        # Soft Delete: Default
         else:
-            super().perform_destroy(instance)
+            instance.is_deleted = True
+            instance.is_active = False
+            instance.save()
+            
+            # Also deactivate associated user accounts if they exist (e.g. for Employee)
+            if hasattr(instance, 'user') and instance.user:
+                instance.user.is_active = False
+                instance.user.save()
 
 
 class AdminWritePermissionMixin:
