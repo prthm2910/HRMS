@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from apps.base.models import BaseTemplateModel
 import uuid
-from datetime import date, timedelta
+from datetime import date
 
 
 class Holiday(BaseTemplateModel):
