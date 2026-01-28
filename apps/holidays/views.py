@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
+from apps.holidays.permissions import IsAdminOrReadOnly
 from apps.base.views import DeleteMixin
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
@@ -11,7 +12,6 @@ from apps.holidays.serializers import (
     HolidayListSerializer,
     BulkHolidayCreateSerializer
 )
-from apps.holidays.permissions import IsAdminOrReadOnly
 
 
 class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
