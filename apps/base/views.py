@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.response import Response
 from apps.base.utils import get_employee_profile
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 
 class SoftDeleteMixin:
@@ -18,6 +19,35 @@ class SoftDeleteMixin:
         if hasattr(instance, 'user') and instance.user:
             instance.user.is_active = False
             instance.user.save()
+
+
+class HardDeleteMixin:
+    """
+    Mixin to allow permanent deletion if 'permanent=true' query param is present
+    and user is a superuser. Otherwise falls back to SoftDeleteMixin.
+    """
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='permanent', 
+                description='Set to "true" to permanently delete the record from the database (Superuser only).', 
+                required=False, 
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY
+            )
+        ]
+    )
+    def destroy(self, request, *args, **kwargs):
+        # We override destroy ONLY to attach the @extend_schema decorator.
+        # This makes the 'permanent' param visible in Swagger/Redoc.
+        # functional logic remains in perform_destroy.
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        if self.request.user.is_superuser and self.request.query_params.get('permanent') == 'true':
+            instance.delete()
+        else:
+            super().perform_destroy(instance)
 
 
 class AdminWritePermissionMixin:
