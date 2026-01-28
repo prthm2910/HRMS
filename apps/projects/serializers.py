@@ -31,19 +31,48 @@ class ProjectMemberSerializer(BaseTemplateSerializer):
         
         return attrs
 
+class ParentProjectSerializer(serializers.ModelSerializer):
+    """
+    Nested serializer for parent project display.
+    Shows name, department details, and project type.
+    """
+    department_details = DepartmentSerializer(source='department', read_only=True)
+    project_type_display = serializers.CharField(source='get_project_type_display', read_only=True)
+    
+    class Meta:
+        model = Project
+        fields = ['id', 'name', 'department_details', 'project_type', 'project_type_display']
+
 class ProjectSerializer(BaseTemplateSerializer):
     department_details = DepartmentSerializer(source='department', read_only=True)
     members = ProjectMemberSerializer(many=True, read_only=True)
+    
+    # For write operations: accept department ID
     department = serializers.PrimaryKeyRelatedField(
         queryset=Project.department.field.related_model.objects.all(), 
-        required=False
+        required=False,
+        write_only=True
     )
+    
+    # For read operations: show full parent project details
+    parent_project_details = ParentProjectSerializer(source='parent_project', read_only=True)
+    
+    # For write operations: accept parent project ID
+    parent_project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
+    
+    project_type_display = serializers.CharField(source='get_project_type_display', read_only=True)
 
     class Meta:
         model = Project
         fields = BaseTemplateSerializer.Meta.fields + [
             'department', 'department_details', 'name', 'description', 
-            'project_type', 'start_date', 'end_date', 'parent_project', 'members'
+            'project_type', 'project_type_display', 'start_date', 'end_date', 
+            'parent_project', 'parent_project_details', 'members'
         ]
     
     def validate(self, attrs):
