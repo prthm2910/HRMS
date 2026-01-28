@@ -35,7 +35,7 @@ class HODViewSet(HardDeleteMixin, AdminWritePermissionMixin, SoftDeleteMixin, Ba
         # Regular users can only see their own HOD record if they are one
         return self.queryset.filter(employee=employee_profile)
 
-@extend_schema(tags=['Departments'])
+@extend_schema(tags=['departments'])
 class DepartmentViewSet(SoftDeleteMixin, BaseReadAuthWriteAdminViewSet):
     """
     Department Management.
@@ -63,7 +63,7 @@ class DepartmentViewSet(SoftDeleteMixin, BaseReadAuthWriteAdminViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=['Employees'])
+@extend_schema(tags=['employees'])
 class EmployeeViewSet(AdminWritePermissionMixin, SoftDeleteMixin, BaseRoleFilteredViewSet):
     """
     Employee Management.
