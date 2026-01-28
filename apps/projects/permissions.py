@@ -7,17 +7,23 @@ class IsProjectAdminOrHODOrReadOnly(permissions.BasePermission):
     - Employee: Read Only
     """
     def has_permission(self, request, view):
+        # Allow all read operations
         if request.method in permissions.SAFE_METHODS:
             return True
         
+        # Allow all write operations for superusers
         if request.user.is_superuser:
             return True
         
         # Check if user is an HOD
-        try:
-            return hasattr(request.user.employee_profile, 'hod_profile')
-        except AttributeError:
+        if not hasattr(request.user, 'employee_profile'):
             return False
+        
+        employee_profile = request.user.employee_profile
+        if hasattr(employee_profile, 'hod_profile'):
+            return True
+        
+        return False
 
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
