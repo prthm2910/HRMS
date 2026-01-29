@@ -252,9 +252,6 @@ pip install -r requirements.txt
 
 ### 4. Configure Environment
 
-```bash
-cp .env.template .env
-```
 
 ```ini
 DB_HOST=<DB_HOST>
