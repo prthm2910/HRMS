@@ -287,13 +287,6 @@ python manage.py runserver
 
 ---
 
-## 📖 API Documentation
-
-- **Swagger UI:** http://localhost:8000/api/schema/swagger-ui/
-- **Redoc:** http://localhost:8000/api/schema/redoc/
-
----
-
 ## 🔒 Security Best Practices
 
 1. UUIDs for IDs to prevent enumeration attacks.
