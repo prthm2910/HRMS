@@ -12,7 +12,7 @@ from apps.base.views import (
     BaseCreateOnlyAuthenticatedViewSet,
     DeleteMixin
 )
-from apps.leaves.models import LeaveRequest, LeaveBalance
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -58,7 +58,7 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         queryset = LeaveRequest.objects.filter(employee=employee_profile)
         
         status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
+        if status_filter and status_filter.upper() in dict(LeaveStatus.choices):
             queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')
@@ -83,7 +83,7 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         status_filter = self.request.query_params.get('status', 'pending')
         if status_filter.lower() != 'all':
-            if status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
+            if status_filter.upper() in dict(LeaveStatus.choices):
                 queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')
