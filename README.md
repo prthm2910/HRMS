@@ -230,18 +230,15 @@ hrms_project/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/hrms-backend.git
-cd hrms-backend
+git clone https://github.com/prthm2910/HRMS
+cd hrms
 ```
 
 ### 2. Create Virtual Environment
 
 ```bash
-python -m venv venv
-# Windows
+python -m venv env
 venv\Scripts\activate
-# Mac/Linux
-source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
