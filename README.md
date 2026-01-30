@@ -238,7 +238,7 @@ cd hrms
 
 ```bash
 python -m venv env
-venv\Scripts\activate
+env\Scripts\activate
 ```
 
 ### 3. Install Dependencies
