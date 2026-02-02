@@ -18,12 +18,19 @@ class SalaryComponent(BaseTemplateModel):
         FIXED = 'FIXED', 'Fixed Amount'
         PERCENTAGE = 'PERCENTAGE', 'Percentage of Base'
     
-    # Business identifier (exposed in APIs)
+    # Human-readable code (primary business identifier)
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        help_text="e.g., BASIC_SALARY, HRA, PF_DEDUCTION"
+    )
+    
+    # UUID fallback identifier
     salary_component_id = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
-        unique=True,
-        db_index=True
+        unique=True
     )
     name = models.CharField(max_length=100, unique=True)
     component_type = models.CharField(
@@ -90,12 +97,19 @@ class EmployeeSalaryStructure(BaseTemplateModel):
 class TaxRule(BaseTemplateModel):
     """Configurable tax slabs"""
     
-    # Business identifier (exposed in APIs)
+    # Human-readable code (primary business identifier)
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        help_text="e.g., IN_SLAB_1, US_FEDERAL_10, UK_BASIC_RATE"
+    )
+    
+    # UUID fallback identifier
     tax_rule_id = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
-        unique=True,
-        db_index=True
+        unique=True
     )
     name = models.CharField(max_length=100)
     country = models.CharField(max_length=2, default='IN')  # ISO country code
@@ -135,12 +149,19 @@ class PayrollRun(BaseTemplateModel):
         COMPLETED = 'COMPLETED', 'Completed'
         FAILED = 'FAILED', 'Failed'
     
-    # Business identifier (exposed in APIs)
+    # Human-readable code (primary business identifier)
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text="e.g., 2026_01, 2026_02 (YYYY_MM format)"
+    )
+    
+    # UUID fallback identifier
     payroll_run_id = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
-        unique=True,
-        db_index=True
+        unique=True
     )
     month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)]
