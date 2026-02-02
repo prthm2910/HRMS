@@ -9,6 +9,7 @@ from apps.base.views import (
     BaseReadAuthWriteAdminViewSet, 
     DeleteMixin, 
     AdminWritePermissionMixin,
+    BaseRoleBasedFilteredViewSet,
     BaseRoleFilteredViewSet
 )
 from apps.organization.models import Employee, Department, HOD
@@ -16,7 +17,7 @@ from apps.organization.serializers import EmployeeSerializer, DepartmentSerializ
 
 
 @extend_schema(tags=['HODs'])
-class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleBasedFilteredViewSet):
     """
     ViewSet for managing Heads of Department.
     Access:
@@ -26,7 +27,6 @@ class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet
     """
     queryset = HOD.objects.filter(is_deleted=False)
     serializer_class = HODSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['department', 'employee']
     search_fields = ['employee__user__username', 'department__name']
     ordering_fields = ['created_at']
