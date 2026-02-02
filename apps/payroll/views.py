@@ -1,10 +1,16 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from apps.base.views import DeleteMixin, AdminWritePermissionMixin
+from apps.base.views import (
+    DeleteMixin,
+    AdminWritePermissionMixin,
+    BaseAuthenticatedViewSet,
+    BaseReadOnlyAuthenticatedViewSet,
+    BaseReadAuthWriteAdminViewSet
+)
 from apps.payroll.models import (
     SalaryComponent,
     EmployeeSalaryStructure,
@@ -26,14 +32,14 @@ from apps.payroll.serializers import (
 )
 
 
-class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelViewSet):
+class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for managing salary components (earnings, deductions, bonuses).
-    Admin-only for write operations.
+    - Read: All authenticated users
+    - Write: Admins only (via AdminWritePermissionMixin)
     """
     queryset = SalaryComponent.objects.filter(is_deleted=False)
     serializer_class = SalaryComponentSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['component_type', 'calculation_method', 'is_taxable']
     search_fields = ['name', 'code']
@@ -42,16 +48,16 @@ class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.Mo
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
-class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelViewSet):
+class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for managing employee salary structures.
-    Admin-only for write operations.
+    - Read: All authenticated users
+    - Write: Admins only (via AdminWritePermissionMixin)
     """
     queryset = EmployeeSalaryStructure.objects.filter(is_deleted=False).select_related(
         'employee', 'salary_component'
     )
     serializer_class = EmployeeSalaryStructureSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['employee', 'salary_component', 'effective_from']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
@@ -59,14 +65,14 @@ class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, vie
     ordering = ['-effective_from']
 
 
-class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelViewSet):
+class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for managing tax rules and slabs.
-    Admin-only for write operations.
+    - Read: All authenticated users
+    - Write: Admins only (via AdminWritePermissionMixin)
     """
     queryset = TaxRule.objects.filter(is_deleted=False)
     serializer_class = TaxRuleSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['country', 'is_active']
     search_fields = ['name', 'code']
@@ -75,14 +81,14 @@ class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelViewS
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
-class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelViewSet):
+class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for managing payroll runs.
-    Admin-only for write operations.
+    - Read: All authenticated users
+    - Write: Admins only (via AdminWritePermissionMixin)
     """
     queryset = PayrollRun.objects.filter(is_deleted=False).select_related('processed_by')
     serializer_class = PayrollRunSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['month', 'year', 'status']
     search_fields = ['code']
@@ -90,12 +96,19 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelVi
     ordering = ['-year', '-month']
     lookup_field = 'code'  # Allow lookup by code instead of ID
     
-    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    @action(detail=True, methods=['post'])
     def process(self, request, code=None):
         """
         Process payroll for this run.
+        Admin-only action (enforced by AdminWritePermissionMixin).
         TODO: Implement payroll calculation logic
         """
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         payroll_run = self.get_object()
         
         if payroll_run.status == PayrollRun.Status.COMPLETED:
@@ -116,17 +129,17 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, viewsets.ModelVi
         })
 
 
-class PayslipViewSet(DeleteMixin, viewsets.ModelViewSet):
+class PayslipViewSet(DeleteMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for managing payslips.
-    Employees can view their own payslips.
-    Admins can view all payslips.
+    - Employees can view their own payslips
+    - Admins can view all payslips
+    - Write operations: Admins only (via custom permission check)
     """
     queryset = Payslip.objects.filter(is_deleted=False).select_related(
         'employee', 'payroll_run'
     ).prefetch_related('components')
     serializer_class = PayslipSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['employee', 'month', 'year', 'payroll_run']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
@@ -154,6 +167,33 @@ class PayslipViewSet(DeleteMixin, viewsets.ModelViewSet):
             return PayslipDetailSerializer
         return PayslipSerializer
     
+    def create(self, request, *args, **kwargs):
+        """Only admins can create payslips"""
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Only admins can update payslips"""
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Only admins can delete payslips"""
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
+    
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
         """
@@ -174,27 +214,28 @@ class PayslipViewSet(DeleteMixin, viewsets.ModelViewSet):
         })
 
 
-class PayslipComponentViewSet(viewsets.ReadOnlyModelViewSet):
+class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     Read-only ViewSet for payslip components.
+    Uses BaseReadOnlyAuthenticatedViewSet for authenticated read-only access.
     """
     queryset = PayslipComponent.objects.filter(is_deleted=False)
     serializer_class = PayslipComponentSerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['payslip', 'component_type']
     ordering_fields = ['component_type', 'amount']
     ordering = ['component_type', 'component_name']
 
 
-class PayrollAutomationConfigViewSet(AdminWritePermissionMixin, viewsets.ModelViewSet):
+class PayrollAutomationConfigViewSet(AdminWritePermissionMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for payroll automation configuration.
-    Admin-only. Singleton pattern - only one config allowed.
+    - Read: All authenticated users
+    - Write: Admins only (via AdminWritePermissionMixin)
+    Singleton pattern - only one config allowed.
     """
     queryset = PayrollAutomationConfig.objects.filter(is_deleted=False)
     serializer_class = PayrollAutomationConfigSerializer
-    permission_classes = [permissions.IsAdminUser]
     
     def get_object(self):
         """Get or create the singleton config"""
@@ -202,3 +243,4 @@ class PayrollAutomationConfigViewSet(AdminWritePermissionMixin, viewsets.ModelVi
             defaults={'is_enabled': False}
         )
         return config
+
