@@ -23,6 +23,8 @@ class SalaryComponent(BaseTemplateModel):
         max_length=50,
         unique=True,
         db_index=True,
+        null=True,
+        blank=True,
         help_text="e.g., BASIC_SALARY, HRA, PF_DEDUCTION"
     )
     
@@ -102,6 +104,8 @@ class TaxRule(BaseTemplateModel):
         max_length=50,
         unique=True,
         db_index=True,
+        null=True,
+        blank=True,
         help_text="e.g., IN_SLAB_1, US_FEDERAL_10, UK_BASIC_RATE"
     )
     
@@ -154,6 +158,8 @@ class PayrollRun(BaseTemplateModel):
         max_length=20,
         unique=True,
         db_index=True,
+        null=True,
+        blank=True,
         help_text="e.g., 2026_01, 2026_02 (YYYY_MM format)"
     )
     
