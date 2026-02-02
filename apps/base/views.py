@@ -84,6 +84,25 @@ class BaseAuthenticatedViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 
+class BaseFilteredViewSet(BaseAuthenticatedViewSet):
+    """
+    Base viewset with authentication AND filtering/search/ordering capabilities.
+    Inherits from BaseAuthenticatedViewSet and adds filter backends.
+    
+    Provides:
+    - DjangoFilterBackend: Field-based filtering (filterset_fields)
+    - SearchFilter: Text search across fields (search_fields)
+    - OrderingFilter: Result ordering (ordering_fields)
+    
+    Use this when you need filtering, search, or ordering in your viewset.
+    Override filter_backends in subclass if you need a different combination.
+    """
+    from django_filters.rest_framework import DjangoFilterBackend
+    from rest_framework.filters import SearchFilter, OrderingFilter
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+
 class BaseCreateOnlyAuthenticatedViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     """
     Base viewset for create-only operations requiring authentication.
@@ -167,6 +186,20 @@ class RoleFilteredMixin:
 class BaseRoleFilteredViewSet(RoleFilteredMixin, BaseAuthenticatedViewSet):
     """
     Base viewset for role-based filtering (Read-Write).
+    """
+    pass
+
+
+class BaseRoleBasedFilteredViewSet(RoleFilteredMixin, BaseFilteredViewSet):
+    """
+    Base viewset combining role-based filtering AND filter backends.
+    Inherits from BaseFilteredViewSet (which provides filter_backends) and adds RoleFilteredMixin.
+    
+    Use this when you need BOTH:
+    - Role-based queryset filtering (admin sees all, users see filtered data)
+    - Filter backends (DjangoFilterBackend, SearchFilter, OrderingFilter)
+    
+    This is the DRY solution for viewsets that need both capabilities.
     """
     pass
 
