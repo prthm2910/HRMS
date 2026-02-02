@@ -8,7 +8,7 @@ THIRD_PARTY_APPS = [
 
 SPECTACULAR_CONFIG = {
     'TITLE': 'HRMS API',
-    'DESCRIPTION': 'Human Resource Management System API with V1/V2 versioning',
+    'DESCRIPTION': 'Human Resource Management System API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }

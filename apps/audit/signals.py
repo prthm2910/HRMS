@@ -12,7 +12,7 @@ User = get_user_model()
 UserModelName = User.__name__
 
 # 2. Add User Model to the list
-TRACKED_MODELS = ['Employee', 'LeaveRequest', 'Department', 'LeaveBalance', 'Holiday', UserModelName]
+TRACKED_MODELS = ['Employee', 'LeaveRequest', 'Department', 'LeaveBalance', 'Holiday', UserModelName, 'HOD', 'Project', 'ProjectMember']
 
 # 3. Define Sensitive Fields to Hide (Security Best Practice)
 SENSITIVE_FIELDS = ['password', 'is_superuser', 'is_staff', 'groups', 'user_permissions']

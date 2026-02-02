@@ -1,40 +1,20 @@
-from rest_framework import viewsets, status, serializers
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.utils import timezone
-from datetime import date
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiTypes, inline_serializer, extend_schema_field
-
-from apps.base.views import SoftDeleteMixin
+from drf_spectacular.utils import extend_schema
+from apps.holidays.permissions import IsAdminOrReadOnly
+from apps.base.views import DeleteMixin
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
     HolidaySerializer,
     HolidayListSerializer,
-    BulkHolidayCreateSerializer,
-    ImageUploadSerializer
+    BulkHolidayCreateSerializer
 )
 
 
-class IsAdminOrReadOnly(IsAuthenticated):
-    """
-    Custom permission: Admin can do anything, regular users can only read.
-    """
-    def has_permission(self, request, view):
-        # Check if user is authenticated
-        if not super().has_permission(request, view):
-            return False
-        
-        # Allow read-only for all authenticated users
-        if request.method in ['GET', 'HEAD', 'OPTIONS']:
-            return True
-        
-        # Write operations require admin/staff
-        return request.user.is_staff or request.user.is_superuser
-
-
-class HolidayViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
+class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing holidays.
     

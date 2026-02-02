@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.base.serializers import BaseTemplateSerializer
-from apps.organization.models import Employee, Department
+from apps.organization.models import Employee, Department, HOD
 
 User = get_user_model()
 
@@ -45,6 +45,7 @@ class EmployeeSerializer(BaseTemplateSerializer):
     # Nested objects for GET requests
     department = DepartmentBasicSerializer(read_only=True)
     manager = EmployeeBasicSerializer(read_only=True)
+    direct_reports_count = serializers.IntegerField(read_only=True)
 
     # --- WRITE ONLY (Input for User Creation) ---
     user_first_name = serializers.CharField(write_only=True, required=False)
@@ -83,13 +84,14 @@ class EmployeeSerializer(BaseTemplateSerializer):
             # Relations (Nested for GET, _id for POST/PUT/PATCH)
             'department', 'department_id',
             'manager', 'manager_id',
+            'direct_reports_count',
             
             # Job Details
             'designation', 'employment_type', 'salary',
             'date_of_joining', 'date_of_birth',
         ]
         # CRITICAL: employee_id is now strictly read-only
-        read_only_fields = ['employee_id']
+        read_only_fields = ['employee_id', 'direct_reports_count']
 
     def create(self, validated_data):
         # Extract user data
@@ -142,3 +144,13 @@ class EmployeeSerializer(BaseTemplateSerializer):
             user.save()
 
         return super().update(instance, validated_data)
+
+class HODSerializer(BaseTemplateSerializer):
+    employee_details = EmployeeSerializer(source='employee', read_only=True)
+    department_details = DepartmentSerializer(source='department', read_only=True)
+
+    class Meta:
+        model = HOD
+        fields = BaseTemplateSerializer.Meta.fields + [
+            'employee', 'department', 'employee_details', 'department_details'
+        ]

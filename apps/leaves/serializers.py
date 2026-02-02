@@ -251,14 +251,6 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                 # Print holiday notification to terminal if holidays were excluded
                 if excluded_holidays:
                     calendar_days = (end - start).days + 1
-                    print("\n" + "="*70)
-                    print(f"📅 LEAVE REQUEST NOTIFICATION")
-                    print("="*70)
-                    print(f"Employee: {employee.employee_id} - {employee.user.get_full_name()}")
-                    print(f"Period: {start} to {end}")
-                    print(f"Calendar Days: {calendar_days}")
-                    print(f"Working Days: {int(days_requested)}")
-                    print(f"\nYou're taking {calendar_days} calendar days but only {int(days_requested)} working days because:")
                     for holiday in excluded_holidays:
                         print(f"  - {holiday['date']} ({holiday['name']}) is a holiday")
                     print("="*70 + "\n")

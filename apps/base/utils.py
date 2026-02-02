@@ -1,7 +1,7 @@
 """
 Common utility functions used across the HRMS application.
 """
-from datetime import timedelta, date
+from datetime import timedelta
 import threading
 
 _thread_locals = threading.local()

@@ -1,19 +1,18 @@
 from datetime import date
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework import status
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
 from apps.base.views import (
-    BaseAuthenticatedViewSet, 
     BaseReadOnlyAuthenticatedViewSet,
     BaseRoleFilteredViewSet,
     BaseRoleFilteredReadOnlyViewSet,
     AdminWritePermissionMixin,
-    BaseCreateOnlyAuthenticatedViewSet
+    BaseCreateOnlyAuthenticatedViewSet,
+    DeleteMixin
 )
-from apps.leaves.models import LeaveRequest, LeaveBalance
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -23,7 +22,7 @@ from apps.leaves.serializers import (
     BulkLeaveResponseSerializer
 )
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Leave Balance'])
 class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
     """
     View to check remaining leaves. 
@@ -42,7 +41,7 @@ class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
         ).distinct().order_by('employee__user__first_name')
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['My Leave Requests'])
 class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for employees to see their own leave requests.
@@ -59,13 +58,13 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         queryset = LeaveRequest.objects.filter(employee=employee_profile)
         
         status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
+        if status_filter and status_filter.upper() in dict(LeaveStatus.choices):
             queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Subordinate Leave Requests'])
 class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     View for managers to see leave requests from their subordinates.
@@ -84,14 +83,14 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         status_filter = self.request.query_params.get('status', 'pending')
         if status_filter.lower() != 'all':
-            if status_filter.upper() in dict(LeaveRequest.STATUS_CHOICES):
+            if status_filter.upper() in dict(LeaveStatus.choices):
                 queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')
 
 
-@extend_schema(tags=['leaves'])
-class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
+@extend_schema(tags=['Leave Requests'])
+class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
@@ -337,7 +336,7 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, BaseRoleFilteredViewSet):
             serializer.save()
 
 
-@extend_schema(tags=['leaves'])
+@extend_schema(tags=['Bulk Leave Requests'])
 class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
     """
     ViewSet for bulk leave application.
@@ -349,7 +348,69 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
     @extend_schema(
         request=BulkLeaveRequestSerializer,
         responses={201: BulkLeaveResponseSerializer, 400: BulkLeaveResponseSerializer},
-        description="Submit multiple leave requests at once (max 5). Returns partial success with detailed results."
+        examples=[
+            OpenApiExample(
+                'Bulk Leave Application',
+                description='Submit multiple leave requests at once (max 5 requests)',
+                value={
+                    "requests": [
+                        {
+                            "leave_type": "CASUAL",
+                            "start_date": "2026-02-10",
+                            "end_date": "2026-02-12",
+                            "reason": "Family function",
+                            "is_half_day": False
+                        },
+                        {
+                            "leave_type": "SICK",
+                            "start_date": "2026-03-05",
+                            "end_date": "2026-03-05",
+                            "reason": "Medical appointment",
+                            "is_half_day": True,
+                            "half_day_period": "FIRST_HALF"
+                        },
+                        {
+                            "leave_type": "EARNED",
+                            "start_date": "2026-04-15",
+                            "end_date": "2026-04-18",
+                            "reason": "Vacation",
+                            "is_half_day": False
+                        }
+                    ]
+                },
+                request_only=True,
+            ),
+        ],
+        description="""
+        **Submit multiple leave requests at once (max 5)**
+        
+        **Request Body Structure:**
+        ```json
+        {
+          "requests": [
+            {
+              "leave_type": "CASUAL|SICK|EARNED|UNPAID",
+              "start_date": "YYYY-MM-DD",
+              "end_date": "YYYY-MM-DD",
+              "reason": "string",
+              "is_half_day": true|false,
+              "half_day_period": "FIRST_HALF|SECOND_HALF" (required if is_half_day=true)
+            }
+          ]
+        }
+        ```
+        
+        **Response:**
+        - Returns partial success with detailed results for each request
+        - `successful`: Array of successfully created leave requests
+        - `failed`: Array of failed requests with validation errors
+        - `summary`: Total, successful, and failed counts
+        
+        **Validation:**
+        - Each request is validated independently
+        - Failed requests don't prevent successful ones from being created
+        - Same validation rules apply as single leave requests
+        """
     )
     def create(self, request):
         """

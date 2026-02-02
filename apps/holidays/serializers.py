@@ -3,8 +3,6 @@ from datetime import date as date_type
 from apps.holidays.models import Holiday
 from apps.base.serializers import BaseTemplateSerializer
 
-# Import Pydantic models from AI services
-from apps.ai_services.schemas.ocr import HolidayExtraction, BulkHolidayExtraction
 
 
 # ============================================================================

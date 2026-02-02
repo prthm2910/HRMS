@@ -1,23 +1,47 @@
 from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.response import Response
 from apps.base.utils import get_employee_profile
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 
-class SoftDeleteMixin:
+class DeleteMixin:
     """
-    Mixin to handle soft deletion of records.
-    Sets is_deleted=True and is_active=False instead of deleting from DB.
-    Also deactivates associated auth user if instance has a 'user' field.
+    Mixin to handle both soft and hard deletion of records.
+    
+    Default behavior: Soft Delete (is_deleted=True, is_active=False)
+    Hard Delete: Superuser only + ?force=true query param
     """
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='force', 
+                description='Set to "true" to permanently delete the record (Superuser only).', 
+                required=False, 
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY
+            )
+        ]
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
     def perform_destroy(self, instance):
-        instance.is_deleted = True
-        instance.is_active = False
-        instance.save()
+        # check for force=true (new standard)
+        force = self.request.query_params.get('force') == 'true'
         
-        # Also deactivate associated user accounts if they exist (e.g. for Employee)
-        if hasattr(instance, 'user') and instance.user:
-            instance.user.is_active = False
-            instance.user.save()
+        # Hard Delete: Superuser + Flag
+        if self.request.user.is_superuser and force:
+            instance.delete()
+        # Soft Delete: Default
+        else:
+            instance.is_deleted = True
+            instance.is_active = False
+            instance.save()
+            
+            # Also deactivate associated user accounts if they exist (e.g. for Employee)
+            if hasattr(instance, 'user') and instance.user:
+                instance.user.is_active = False
+                instance.user.save()
 
 
 class AdminWritePermissionMixin:
