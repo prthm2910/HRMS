@@ -123,6 +123,39 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
             'message': 'Payroll processing started',
             'payroll_run_id': str(payroll_run.payroll_run_id)
         })
+    
+    @action(detail=True, methods=['post'])
+    def send_all_payslips(self, request, code=None):
+        """
+        Send payslip emails to all employees in this payroll run.
+        Admin-only action.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        payroll_run = self.get_object()
+        
+        try:
+            from apps.payroll.services.email_service import send_bulk_payslip_emails
+            
+            # Send emails
+            results = send_bulk_payslip_emails(payroll_run)
+            
+            return Response({
+                'message': 'Bulk email sending completed',
+                'total': results['total'],
+                'sent': results['sent'],
+                'failed': results['failed'],
+                'errors': results['errors']
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': f'Bulk email sending failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
@@ -140,6 +173,7 @@ class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     ordering_fields = ['year', 'month', 'created_at']
     ordering = ['-year', '-month']
+    lookup_field = 'payslip_id'  # Use UUID for lookups
     
     def get_queryset(self):
         """Filter payslips based on user role"""
@@ -189,24 +223,109 @@ class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
             )
         return super().destroy(request, *args, **kwargs)
     
-    @action(detail=True, methods=['get'])
-    def download(self, request, pk=None):
+    @action(detail=True, methods=['post'])
+    def generate_pdf(self, request, payslip_id=None):
         """
-        Download payslip PDF.
-        TODO: Implement PDF generation
+        Generate PDF for this payslip.
+        Admin-only action.
         """
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         payslip = self.get_object()
         
+        try:
+            # Generate PDF
+            pdf_file = payslip.generate_pdf()
+            
+            return Response({
+                'message': 'PDF generated successfully',
+                'pdf_url': request.build_absolute_uri(pdf_file.url)
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': f'PDF generation failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def download(self, request, payslip_id=None):
+        """
+        Download payslip PDF.
+        Employees can download their own payslips, admins can download any.
+        """
+        from django.http import FileResponse
+        
+        payslip = self.get_object()
+        
+        # Check if PDF exists
         if not payslip.pdf_file:
             return Response(
-                {'error': 'PDF not generated yet'},
+                {'error': 'PDF not generated yet. Please generate PDF first.'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # TODO: Return PDF file response
-        return Response({
-            'pdf_url': request.build_absolute_uri(payslip.pdf_file.url)
-        })
+        # Return PDF file
+        try:
+            return FileResponse(
+                payslip.pdf_file.open('rb'),
+                content_type='application/pdf',
+                as_attachment=True,
+                filename=f"payslip_{payslip.employee.employee_id}_{payslip.year}_{payslip.month:02d}.pdf"
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to download PDF: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def send_email(self, request, payslip_id=None):
+        """
+        Send payslip via email to employee.
+        Admin-only action.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        payslip = self.get_object()
+        
+        # Check if PDF exists
+        if not payslip.pdf_file:
+            return Response(
+                {'error': 'PDF not generated. Please generate PDF first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from apps.payroll.services.email_service import send_payslip_email
+            
+            # Send email
+            success = send_payslip_email(payslip)
+            
+            if success:
+                return Response({
+                    'message': 'Payslip email sent successfully',
+                    'sent_to': payslip.employee.user.email,
+                    'sent_at': payslip.email_sent_at
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {'error': 'Failed to send email'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        except Exception as e:
+            return Response(
+                {'error': f'Email sending failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 
 class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
