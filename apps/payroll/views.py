@@ -9,7 +9,7 @@ from apps.base.views import (
     AdminWritePermissionMixin,
     BaseAuthenticatedViewSet,
     BaseReadOnlyAuthenticatedViewSet,
-    BaseReadAuthWriteAdminViewSet
+    BaseFilteredViewSet
 )
 from apps.payroll.models import (
     SalaryComponent,
@@ -32,7 +32,7 @@ from apps.payroll.serializers import (
 )
 
 
-class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
+class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing salary components (earnings, deductions, bonuses).
     - Read: All authenticated users
@@ -40,7 +40,6 @@ class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthent
     """
     queryset = SalaryComponent.objects.filter(is_deleted=False)
     serializer_class = SalaryComponentSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['component_type', 'calculation_method', 'is_taxable']
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'component_type', 'created_at']
@@ -48,7 +47,7 @@ class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthent
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
-class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
+class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing employee salary structures.
     - Read: All authenticated users
@@ -58,14 +57,13 @@ class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, Bas
         'employee', 'salary_component'
     )
     serializer_class = EmployeeSalaryStructureSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['employee', 'salary_component', 'effective_from']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     ordering_fields = ['effective_from', 'amount', 'created_at']
     ordering = ['-effective_from']
 
 
-class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
+class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing tax rules and slabs.
     - Read: All authenticated users
@@ -73,7 +71,6 @@ class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedVi
     """
     queryset = TaxRule.objects.filter(is_deleted=False)
     serializer_class = TaxRuleSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['country', 'is_active']
     search_fields = ['name', 'code']
     ordering_fields = ['country', 'min_income', 'created_at']
@@ -81,7 +78,7 @@ class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedVi
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
-class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticatedViewSet):
+class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing payroll runs.
     - Read: All authenticated users
@@ -89,7 +86,6 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticate
     """
     queryset = PayrollRun.objects.filter(is_deleted=False).select_related('processed_by')
     serializer_class = PayrollRunSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['month', 'year', 'status']
     search_fields = ['code']
     ordering_fields = ['year', 'month', 'created_at']
@@ -129,7 +125,7 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseAuthenticate
         })
 
 
-class PayslipViewSet(DeleteMixin, BaseAuthenticatedViewSet):
+class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing payslips.
     - Employees can view their own payslips
@@ -140,7 +136,6 @@ class PayslipViewSet(DeleteMixin, BaseAuthenticatedViewSet):
         'employee', 'payroll_run'
     ).prefetch_related('components')
     serializer_class = PayslipSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['employee', 'month', 'year', 'payroll_run']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     ordering_fields = ['year', 'month', 'created_at']
