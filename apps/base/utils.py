@@ -3,8 +3,32 @@ Common utility functions used across the HRMS application.
 """
 from datetime import timedelta
 import threading
+import calendar
 
 _thread_locals = threading.local()
+
+
+def get_month_name(month: int) -> str:
+    """
+    Convert month number to month name
+    
+    Args:
+        month (int): Month number (1-12)
+        
+    Returns:
+        str: Full month name (e.g., 'January', 'February')
+        
+    Example:
+        >>> get_month_name(1)
+        'January'
+        >>> get_month_name(12)
+        'December'
+    """
+    if not 1 <= month <= 12:
+        raise ValueError(f"Month must be between 1 and 12, got {month}")
+    
+    return calendar.month_name[month]
+
 
 
 def calculate_working_days(start_date, end_date, region=None):
