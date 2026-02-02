@@ -260,6 +260,24 @@ class Payslip(BaseTemplateModel):
     
     def __str__(self):
         return f"{self.employee.user.get_full_name()} - {self.month}/{self.year}"
+    
+    def generate_pdf(self):
+        """
+        Generate PDF payslip using hybrid approach (WeasyPrint + ReportLab)
+        Saves the PDF to the pdf_file field
+        """
+        from django.core.files.base import ContentFile
+        from apps.payroll.services.pdf_generator import generate_payslip_pdf
+        
+        # Generate PDF bytes
+        pdf_bytes = generate_payslip_pdf(self)
+        
+        # Save to file field
+        filename = f"payslip_{self.employee.employee_id}_{self.year}_{self.month:02d}.pdf"
+        self.pdf_file.save(filename, ContentFile(pdf_bytes), save=True)
+        
+        return self.pdf_file
+
 
 
 class PayslipComponent(BaseTemplateModel):
