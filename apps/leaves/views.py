@@ -12,7 +12,7 @@ from apps.base.views import (
     BaseCreateOnlyAuthenticatedViewSet,
     DeleteMixin
 )
-from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus, LeaveType
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -57,9 +57,31 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         queryset = LeaveRequest.objects.filter(employee=employee_profile)
         
+        # Existing status filter
         status_filter = self.request.query_params.get('status')
         if status_filter and status_filter.upper() in dict(LeaveStatus.choices):
             queryset = queryset.filter(status=status_filter.upper())
+        
+        # NEW: Month filter
+        month = self.request.query_params.get('month')
+        if month:
+            try:
+                queryset = queryset.filter(start_date__month=int(month))
+            except ValueError:
+                pass  # Invalid month, ignore filter
+        
+        # NEW: Year filter
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                queryset = queryset.filter(start_date__year=int(year))
+            except ValueError:
+                pass  # Invalid year, ignore filter
+        
+        # NEW: Leave type filter
+        leave_type = self.request.query_params.get('leave_type')
+        if leave_type and leave_type.upper() in dict(LeaveType.choices):
+            queryset = queryset.filter(leave_type=leave_type.upper())
         
         return queryset.order_by('-created_at')
 
