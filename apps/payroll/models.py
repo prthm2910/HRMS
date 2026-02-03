@@ -18,14 +18,13 @@ class SalaryComponent(BaseTemplateModel):
         FIXED = 'FIXED', 'Fixed Amount'
         PERCENTAGE = 'PERCENTAGE', 'Percentage of Base'
     
-    # Human-readable code (primary business identifier)
-    code = models.CharField(
+    # Auto-generated slug from name (primary business identifier)
+    code = models.SlugField(
         max_length=50,
         unique=True,
         db_index=True,
-        null=True,
         blank=True,
-        help_text="e.g., BASIC_SALARY, HRA, PF_DEDUCTION"
+        help_text="Auto-generated from name (e.g., basic-salary, hra, pf-deduction)"
     )
     
     # UUID fallback identifier
@@ -54,6 +53,21 @@ class SalaryComponent(BaseTemplateModel):
     class Meta:
         db_table = 'salary_components'
         ordering = ['component_type', 'name']
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate code from name if not provided
+        if not self.code:
+            from django.utils.text import slugify
+            self.code = slugify(self.name)
+            
+            # Ensure uniqueness by appending number if needed
+            original_code = self.code
+            counter = 1
+            while SalaryComponent.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = f"{original_code}-{counter}"
+                counter += 1
+        
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.name} ({self.get_component_type_display()})"
@@ -99,14 +113,13 @@ class EmployeeSalaryStructure(BaseTemplateModel):
 class TaxRule(BaseTemplateModel):
     """Configurable tax slabs"""
     
-    # Human-readable code (primary business identifier)
-    code = models.CharField(
+    # Auto-generated slug from name (primary business identifier)
+    code = models.SlugField(
         max_length=50,
         unique=True,
         db_index=True,
-        null=True,
         blank=True,
-        help_text="e.g., IN_SLAB_1, US_FEDERAL_10, UK_BASIC_RATE"
+        help_text="Auto-generated from name (e.g., india-tax-slab-1-0-3l)"
     )
     
     # UUID fallback identifier
@@ -142,6 +155,21 @@ class TaxRule(BaseTemplateModel):
     
     def __str__(self):
         return f"{self.name} ({self.country}): {self.tax_percentage}%"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate code from name if not provided
+        if not self.code:
+            from django.utils.text import slugify
+            self.code = slugify(self.name)
+            
+            # Ensure uniqueness
+            original_code = self.code
+            counter = 1
+            while TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = f"{original_code}-{counter}"
+                counter += 1
+        
+        super().save(*args, **kwargs)
 
 
 class PayrollRun(BaseTemplateModel):
@@ -153,14 +181,13 @@ class PayrollRun(BaseTemplateModel):
         COMPLETED = 'COMPLETED', 'Completed'
         FAILED = 'FAILED', 'Failed'
     
-    # Human-readable code (primary business identifier)
-    code = models.CharField(
-        max_length=20,
+    # Auto-generated slug from month/year (primary business identifier)
+    code = models.SlugField(
+        max_length=50,
         unique=True,
         db_index=True,
-        null=True,
         blank=True,
-        help_text="e.g., 2026_01, 2026_02 (YYYY_MM format)"
+        help_text="Auto-generated from month/year (e.g., pr-february-2026)"
     )
     
     # UUID fallback identifier
@@ -210,6 +237,24 @@ class PayrollRun(BaseTemplateModel):
     
     def __str__(self):
         return f"Payroll {self.month}/{self.year} - {self.get_status_display()}"
+    
+    def save(self, *args, **kwargs):
+        """Auto-generate code from month/year if not provided"""
+        if not self.code:
+            from apps.base.utils import get_month_name
+            from django.utils.text import slugify
+            
+            month_name = get_month_name(self.month)
+            self.code = slugify(f"pr-{month_name}-{self.year}")
+            
+            # Ensure uniqueness by appending version number if needed
+            original_code = self.code
+            counter = 1
+            while PayrollRun.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = f"{original_code}-v{counter}"
+                counter += 1
+        
+        super().save(*args, **kwargs)
 
 
 class Payslip(BaseTemplateModel):
