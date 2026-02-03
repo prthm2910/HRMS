@@ -1,3 +1,4 @@
+from datetime import date
 from rest_framework import serializers
 from apps.payroll.models import (
     SalaryComponent,
@@ -37,6 +38,9 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
     component_details = SalaryComponentSerializer(source='salary_component', read_only=True)
     
+    # Default effective_from to today if not provided
+    effective_from = serializers.DateField(default=serializers.CreateOnlyDefault(date.today))
+    
     class Meta:
         model = EmployeeSalaryStructure
         fields = [
@@ -53,6 +57,33 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
         read_only_fields = ['id', 'employee_salary_structure_id', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        """
+        Auto-close old salary structure when creating new one
+        for same employee + salary_component combination
+        """
+        from datetime import timedelta
+        
+        employee = validated_data['employee']
+        component = validated_data['salary_component']
+        new_effective_from = validated_data['effective_from']
+        
+        # Find existing open structure for same employee+component
+        old_structure = EmployeeSalaryStructure.objects.filter(
+            employee=employee,
+            salary_component=component,
+            effective_to__isnull=True,
+            is_deleted=False
+        ).first()
+        
+        if old_structure and old_structure.effective_from < new_effective_from:
+            # Auto-close old structure (1 day before new structure starts)
+            old_structure.effective_to = new_effective_from - timedelta(days=1)
+            old_structure.save()
+        
+        # Create new structure
+        return super().create(validated_data)
 
 
 class TaxRuleSerializer(serializers.ModelSerializer):
@@ -116,7 +147,7 @@ class PayrollRunSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
     
-    def get_payslip_count(self, obj):
+    def get_payslip_count(self, obj) -> int:
         return obj.payslips.count()
 
 
@@ -141,6 +172,7 @@ class PayslipSerializer(serializers.ModelSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
     components = PayslipComponentSerializer(many=True, read_only=True)
     payroll_run_code = serializers.CharField(source='payroll_run.code', read_only=True)
+    unpaid_leaves_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Payslip
@@ -157,6 +189,7 @@ class PayslipSerializer(serializers.ModelSerializer):
             'total_deductions',
             'net_salary',
             'leave_days_deducted',
+            'unpaid_leaves_url',
             'pdf_file',
             'email_sent_at',
             'components',
@@ -171,6 +204,15 @@ class PayslipSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
+    
+    def get_unpaid_leaves_url(self, obj):
+        """
+        Return URL to view unpaid leaves if deductions exist
+        Provides transparency for leave deductions
+        """
+        if obj.leave_days_deducted and obj.leave_days_deducted > 0:
+            return f"/api/leaves/my-leave-requests/?month={obj.month}&year={obj.year}&leave_type=UNPAID&status=APPROVED"
+        return None
 
 
 class PayslipDetailSerializer(PayslipSerializer):

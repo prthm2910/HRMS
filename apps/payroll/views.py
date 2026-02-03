@@ -1,8 +1,9 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import OrderingFilter
 
 from apps.base.views import (
     DeleteMixin,
@@ -31,7 +32,7 @@ from apps.payroll.serializers import (
     PayrollAutomationConfigSerializer
 )
 
-
+@extend_schema(tags=['Salary Component'])
 class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing salary components (earnings, deductions, bonuses).
@@ -47,6 +48,7 @@ class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFiltere
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
+@extend_schema(tags=['Employee Salary Structure'])
 class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing employee salary structures.
@@ -63,6 +65,7 @@ class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, Bas
     ordering = ['-effective_from']
 
 
+@extend_schema(tags=['Tax Rule'])
 class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing tax rules and slabs.
@@ -78,6 +81,7 @@ class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet
     lookup_field = 'code'  # Allow lookup by code instead of ID
 
 
+@extend_schema(tags=['Payroll Run'])
 class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing payroll runs.
@@ -97,7 +101,7 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
         """
         Process payroll for this run.
         Admin-only action (enforced by AdminWritePermissionMixin).
-        TODO: Implement payroll calculation logic
+        Generates payslips for all active employees.
         """
         if not request.user.is_superuser:
             return Response(
@@ -113,16 +117,25 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # TODO: Implement payroll generation logic here
-        # 1. Get all active employees
-        # 2. Calculate salary for each employee
-        # 3. Create payslips
-        # 4. Update totals
-        
-        return Response({
-            'message': 'Payroll processing started',
-            'payroll_run_id': str(payroll_run.payroll_run_id)
-        })
+        try:
+            # Use PayrollProcessor service
+            from apps.payroll.services.payroll_processor import PayrollProcessor
+            
+            processor = PayrollProcessor(payroll_run)
+            results = processor.process()
+            
+            return Response({
+                'message': 'Payroll processed successfully',
+                'payslips_created': results['count'],
+                'working_days': results['working_days'],
+                'status': payroll_run.get_status_display()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Payroll processing failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['post'])
     def send_all_payslips(self, request, code=None):
@@ -158,6 +171,7 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
             )
 
 
+@extend_schema(tags=['Payslip'])
 class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing payslips.
@@ -327,7 +341,7 @@ class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
             )
 
 
-
+@extend_schema(tags=['Payslip Component'])
 class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     Read-only ViewSet for payslip components.
@@ -341,6 +355,7 @@ class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
     ordering = ['component_type', 'component_name']
 
 
+@extend_schema(tags=['Payroll Automation Config'])
 class PayrollAutomationConfigViewSet(AdminWritePermissionMixin, BaseAuthenticatedViewSet):
     """
     ViewSet for payroll automation configuration.
