@@ -1,6 +1,6 @@
-from rest_framework import viewsets, permissions, status, mixins
-from rest_framework.response import Response
+from rest_framework import viewsets, permissions, mixins
 from apps.base.utils import get_employee_profile
+from apps.base.permissions import IsAdminUserOrReadOnly, IsAdminWriteOnly
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 
@@ -44,36 +44,6 @@ class DeleteMixin:
                 instance.user.save()
 
 
-class AdminWritePermissionMixin:
-    """
-    Mixin to restrict create/update/destroy actions to Superadmins only.
-    Usage: Inherit this BEFORE the ViewSet class.
-    """
-    admin_forbidden_message = "Forbidden: Only Administrators have permission to perform this action."
-
-    def create(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": self.admin_forbidden_message},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": self.admin_forbidden_message},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": self.admin_forbidden_message},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().destroy(request, *args, **kwargs)
 
 
 class BaseAuthenticatedViewSet(viewsets.ModelViewSet):
@@ -134,21 +104,25 @@ class BaseReadOnlyAdminViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
 
-class BaseReadAuthWriteAdminViewSet(viewsets.ModelViewSet):
+class AdminWriteViewSet(viewsets.ModelViewSet):
     """
     Base viewset with dynamic permissions:
     - Read (list, retrieve): Authenticated users
     - Write (create, update, delete): Admin/Staff only
-    
-    Use for resources that anyone can view but only admins can modify.
     """
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [permissions.IsAuthenticated()]
-        return [permissions.IsAdminUser()]
+    permission_classes = [IsAdminUserOrReadOnly]
 
+
+class SuperadminViewSet(viewsets.ModelViewSet):
+    """
+    Base viewset with strict dynamic permissions:
+    - Read (list, retrieve): Authenticated users
+    - Write (create, update, delete): Superusers only
+    """
+    permission_classes = [IsAdminWriteOnly]
+
+
+# --- Mixins ---
 
 class RoleFilteredMixin:
     """
@@ -183,14 +157,50 @@ class RoleFilteredMixin:
         raise NotImplementedError("Subclasses must implement get_standard_user_queryset")
 
 
-class BaseRoleFilteredViewSet(RoleFilteredMixin, BaseAuthenticatedViewSet):
+# --- Specialized Superadmin ViewSets (IsAdminWriteOnly) ---
+
+class SuperadminFilterViewSet(BaseFilteredViewSet):
+    """Superadmin-Write + Filtering, Search, Ordering backends."""
+    permission_classes = [IsAdminWriteOnly]
+
+
+class SuperadminRoleViewSet(RoleFilteredMixin, SuperadminViewSet):
+    """Superadmin-Write + Role Filtering (Admin sees all, Managers/Employees see limited)."""
+    pass
+
+
+class SuperadminFullViewSet(RoleFilteredMixin, SuperadminFilterViewSet):
+    """Superadmin-Write + Role Filtering + Filtering/Search/Ordering backends."""
+    pass
+
+
+# --- Specialized Admin ViewSets (IsAdminUserOrReadOnly) ---
+
+class AdminWriteFilterViewSet(BaseFilteredViewSet):
+    """Admin-Write + Filtering, Search, Ordering backends."""
+    permission_classes = [IsAdminUserOrReadOnly]
+
+
+class AdminWriteRoleViewSet(RoleFilteredMixin, AdminWriteViewSet):
+    """Admin-Write + Role Filtering."""
+    pass
+
+
+class AdminWriteFullViewSet(RoleFilteredMixin, AdminWriteFilterViewSet):
+    """Admin-Write + Role Filtering + Filtering/Search/Ordering backends."""
+    pass
+
+
+
+
+class RoleViewSet(RoleFilteredMixin, BaseAuthenticatedViewSet):
     """
     Base viewset for role-based filtering (Read-Write).
     """
     pass
 
 
-class BaseRoleBasedFilteredViewSet(RoleFilteredMixin, BaseFilteredViewSet):
+class RoleFullViewSet(RoleFilteredMixin, BaseFilteredViewSet):
     """
     Base viewset combining role-based filtering AND filter backends.
     Inherits from BaseFilteredViewSet (which provides filter_backends) and adds RoleFilteredMixin.
@@ -204,7 +214,7 @@ class BaseRoleBasedFilteredViewSet(RoleFilteredMixin, BaseFilteredViewSet):
     pass
 
 
-class BaseRoleFilteredReadOnlyViewSet(RoleFilteredMixin, BaseReadOnlyAuthenticatedViewSet):
+class RoleReadOnlyViewSet(RoleFilteredMixin, BaseReadOnlyAuthenticatedViewSet):
     """
     Base viewset for role-based filtering (Read-Only).
     """
