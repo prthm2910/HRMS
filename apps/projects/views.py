@@ -1,14 +1,14 @@
 from rest_framework import filters 
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
-from apps.base.views import BaseRoleBasedFilteredViewSet, DeleteMixin
+from apps.base.views import RoleFullViewSet, DeleteMixin
 from apps.projects.models import Project, ProjectMember
 from apps.projects.serializers import ProjectSerializer, ProjectMemberSerializer
 from apps.projects.permissions import IsProjectAdminOrHODOrReadOnly
 
 
 @extend_schema(tags=['Projects'])
-class ProjectViewSet(DeleteMixin, BaseRoleBasedFilteredViewSet):
+class ProjectViewSet(DeleteMixin, RoleFullViewSet):
     """
     ViewSet for managing Projects.
     Access:
@@ -32,7 +32,7 @@ class ProjectViewSet(DeleteMixin, BaseRoleBasedFilteredViewSet):
         return self.queryset.filter(members__employee=employee_profile).distinct()
 
 @extend_schema(tags=['Project Members'])
-class ProjectMemberViewSet(DeleteMixin, BaseRoleBasedFilteredViewSet):
+class ProjectMemberViewSet(DeleteMixin, RoleFullViewSet):
     """
     ViewSet for managing Project Members.
     Access:

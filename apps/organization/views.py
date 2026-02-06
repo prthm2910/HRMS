@@ -1,23 +1,20 @@
-from rest_framework import filters, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
-from django.core.exceptions import ValidationError
-from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from apps.base.views import (
-    BaseReadAuthWriteAdminViewSet, 
+    AdminWriteViewSet, 
     DeleteMixin, 
-    AdminWritePermissionMixin,
-    BaseRoleBasedFilteredViewSet,
-    BaseRoleFilteredViewSet
+    SuperadminRoleViewSet,
+    SuperadminFullViewSet
 )
 from apps.organization.models import Employee, Department, HOD
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer, HODSerializer
 
 
 @extend_schema(tags=['HODs'])
-class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleBasedFilteredViewSet):
+class HODViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing Heads of Department.
     Access:
@@ -37,7 +34,7 @@ class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleBasedFilteredVi
         return self.queryset.filter(employee=employee_profile)
 
 @extend_schema(tags=['Departments'])
-class DepartmentViewSet(DeleteMixin, BaseReadAuthWriteAdminViewSet):
+class DepartmentViewSet(DeleteMixin, AdminWriteViewSet):
     """
     Department Management.
     Access: Anyone authenticated can View. Only Admins can Create/Update/Delete.
@@ -49,7 +46,7 @@ class DepartmentViewSet(DeleteMixin, BaseReadAuthWriteAdminViewSet):
 
 
 @extend_schema(tags=['Employees'])
-class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
     """
     Employee Management.
     Access:

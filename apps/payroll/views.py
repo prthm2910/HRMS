@@ -1,5 +1,5 @@
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -7,11 +7,10 @@ from rest_framework.filters import OrderingFilter
 
 from apps.base.views import (
     DeleteMixin,
-    AdminWritePermissionMixin,
-    BaseAuthenticatedViewSet,
+    SuperadminViewSet,
     BaseReadOnlyAuthenticatedViewSet,
-    BaseFilteredViewSet,
-    RoleFilteredMixin
+    SuperadminFilterViewSet,
+    SuperadminFullViewSet
 )
 from apps.payroll.models import (
     SalaryComponent,
@@ -34,11 +33,11 @@ from apps.payroll.serializers import (
 )
 
 @extend_schema(tags=['Salary Component'])
-class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
+class SalaryComponentViewSet(DeleteMixin, SuperadminFilterViewSet):
     """
     ViewSet for managing salary components (earnings, deductions, bonuses).
     - Read: All authenticated users
-    - Write: Admins only (via AdminWritePermissionMixin)
+    - Write: Admins only (via IsAdminWriteOnly)
     """
     queryset = SalaryComponent.objects.filter(is_deleted=False)
     serializer_class = SalaryComponentSerializer
@@ -50,11 +49,11 @@ class SalaryComponentViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFiltere
 
 
 @extend_schema(tags=['Employee Salary Structure'])
-class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
+class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFilterViewSet):
     """
     ViewSet for managing employee salary structures.
     - Read: All authenticated users
-    - Write: Admins only (via AdminWritePermissionMixin)
+    - Write: Admins only (via IsAdminWriteOnly)
     """
     queryset = EmployeeSalaryStructure.objects.filter(is_deleted=False).select_related(
         'employee', 'salary_component'
@@ -67,11 +66,11 @@ class EmployeeSalaryStructureViewSet(AdminWritePermissionMixin, DeleteMixin, Bas
 
 
 @extend_schema(tags=['Tax Rule'])
-class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
+class TaxRuleViewSet(DeleteMixin, SuperadminFilterViewSet):
     """
     ViewSet for managing tax rules and slabs.
     - Read: All authenticated users
-    - Write: Admins only (via AdminWritePermissionMixin)
+    - Write: Admins only (via IsAdminWriteOnly)
     """
     queryset = TaxRule.objects.filter(is_deleted=False)
     serializer_class = TaxRuleSerializer
@@ -83,11 +82,11 @@ class TaxRuleViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet
 
 
 @extend_schema(tags=['Payroll Run'])
-class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredViewSet):
+class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
     """
     ViewSet for managing payroll runs.
     - Read: All authenticated users
-    - Write: Admins only (via AdminWritePermissionMixin)
+    - Write: Admins only (via IsAdminWriteOnly)
     """
     queryset = PayrollRun.objects.filter(is_deleted=False).select_related('processed_by')
     serializer_class = PayrollRunSerializer
@@ -97,18 +96,13 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
     ordering = ['-year', '-month']
     lookup_field = 'code'  # Allow lookup by code instead of ID
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def process(self, request, code=None):
         """
         Process payroll for this run.
-        Admin-only action (enforced by AdminWritePermissionMixin).
+        Admin-only action.
         Generates payslips for all active employees.
         """
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         payroll_run = self.get_object()
         
@@ -138,17 +132,12 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def send_all_payslips(self, request, code=None):
         """
         Send payslip emails to all employees in this payroll run.
         Admin-only action.
         """
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         payroll_run = self.get_object()
         
@@ -172,13 +161,12 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
             )
 
 
-@extend_schema(tags=['Payslip'])
-class PayslipViewSet(AdminWritePermissionMixin, RoleFilteredMixin, DeleteMixin, BaseFilteredViewSet):
+class PayslipViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing payslips.
     - Employees can view their own payslips
     - Admins can view all payslips
-    - Write operations: Admins only (via AdminWritePermissionMixin)
+    - Write operations: Admins only (via IsAdminWriteOnly)
     """
     queryset = Payslip.objects.filter(is_deleted=False).select_related(
         'employee', 'payroll_run'
@@ -200,17 +188,12 @@ class PayslipViewSet(AdminWritePermissionMixin, RoleFilteredMixin, DeleteMixin, 
             return PayslipDetailSerializer
         return PayslipSerializer
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def generate_pdf(self, request, payslip_id=None):
         """
         Generate PDF for this payslip.
         Admin-only action.
         """
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         payslip = self.get_object()
         
@@ -259,17 +242,12 @@ class PayslipViewSet(AdminWritePermissionMixin, RoleFilteredMixin, DeleteMixin, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def send_email(self, request, payslip_id=None):
         """
         Send payslip via email to employee.
         Admin-only action.
         """
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
         payslip = self.get_object()
         
@@ -319,11 +297,11 @@ class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
 
 
 @extend_schema(tags=['Payroll Automation Config'])
-class PayrollAutomationConfigViewSet(AdminWritePermissionMixin, BaseAuthenticatedViewSet):
+class PayrollAutomationConfigViewSet(SuperadminViewSet):
     """
     ViewSet for payroll automation configuration.
     - Read: All authenticated users
-    - Write: Admins only (via AdminWritePermissionMixin)
+    - Write: Admins only (via IsAdminWriteOnly)
     Singleton pattern - only one config allowed.
     """
     queryset = PayrollAutomationConfig.objects.filter(is_deleted=False)

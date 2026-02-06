@@ -6,9 +6,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
 from apps.base.views import (
     BaseReadOnlyAuthenticatedViewSet,
-    BaseRoleFilteredViewSet,
-    BaseRoleFilteredReadOnlyViewSet,
-    AdminWritePermissionMixin,
+    SuperadminRoleViewSet,
+    RoleReadOnlyViewSet,
     BaseCreateOnlyAuthenticatedViewSet,
     DeleteMixin
 )
@@ -23,7 +22,7 @@ from apps.leaves.serializers import (
 )
 
 @extend_schema(tags=['Leave Balance'])
-class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
+class LeaveBalanceViewSet(RoleReadOnlyViewSet):
     """
     View to check remaining leaves. 
     Strictly Read-Only for everyone.
@@ -112,7 +111,7 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
 
 
 @extend_schema(tags=['Leave Requests'])
-class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave

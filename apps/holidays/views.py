@@ -4,8 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
-from apps.holidays.permissions import IsAdminOrReadOnly
-from apps.base.views import DeleteMixin
+from apps.base.views import DeleteMixin, AdminWriteViewSet
 from apps.holidays.models import Holiday
 from apps.holidays.serializers import (
     HolidaySerializer,
@@ -14,7 +13,7 @@ from apps.holidays.serializers import (
 )
 
 
-class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
+class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
     """
     ViewSet for managing holidays.
     
@@ -32,7 +31,6 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
     - POST /api/holidays/bulk-create/ - Create multiple holidays at once
     """
     
-    permission_classes = [IsAdminOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_queryset(self):
