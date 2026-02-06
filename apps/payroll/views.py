@@ -10,7 +10,8 @@ from apps.base.views import (
     AdminWritePermissionMixin,
     BaseAuthenticatedViewSet,
     BaseReadOnlyAuthenticatedViewSet,
-    BaseFilteredViewSet
+    BaseFilteredViewSet,
+    RoleFilteredMixin
 )
 from apps.payroll.models import (
     SalaryComponent,
@@ -172,12 +173,12 @@ class PayrollRunViewSet(AdminWritePermissionMixin, DeleteMixin, BaseFilteredView
 
 
 @extend_schema(tags=['Payslip'])
-class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
+class PayslipViewSet(AdminWritePermissionMixin, RoleFilteredMixin, DeleteMixin, BaseFilteredViewSet):
     """
     ViewSet for managing payslips.
     - Employees can view their own payslips
     - Admins can view all payslips
-    - Write operations: Admins only (via custom permission check)
+    - Write operations: Admins only (via AdminWritePermissionMixin)
     """
     queryset = Payslip.objects.filter(is_deleted=False).select_related(
         'employee', 'payroll_run'
@@ -189,53 +190,15 @@ class PayslipViewSet(DeleteMixin, BaseFilteredViewSet):
     ordering = ['-year', '-month']
     lookup_field = 'payslip_id'  # Use UUID for lookups
     
-    def get_queryset(self):
-        """Filter payslips based on user role"""
-        queryset = super().get_queryset()
-        
-        # Admins see all payslips
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            return queryset
-        
-        # Employees see only their own payslips
-        try:
-            employee = self.request.user.employee_profile
-            return queryset.filter(employee=employee)
-        except:
-            return queryset.none()
+    def get_standard_user_queryset(self, employee_profile):
+        """Employees see only their own payslips"""
+        return self.queryset.filter(employee=employee_profile)
     
     def get_serializer_class(self):
         """Use detailed serializer for retrieve action"""
         if self.action == 'retrieve':
             return PayslipDetailSerializer
         return PayslipSerializer
-    
-    def create(self, request, *args, **kwargs):
-        """Only admins can create payslips"""
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().create(request, *args, **kwargs)
-    
-    def update(self, request, *args, **kwargs):
-        """Only admins can update payslips"""
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().update(request, *args, **kwargs)
-    
-    def destroy(self, request, *args, **kwargs):
-        """Only admins can delete payslips"""
-        if not request.user.is_superuser:
-            return Response(
-                {'detail': 'Forbidden: Only Administrators have permission to perform this action.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().destroy(request, *args, **kwargs)
     
     @action(detail=True, methods=['post'])
     def generate_pdf(self, request, payslip_id=None):
