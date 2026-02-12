@@ -6,9 +6,9 @@ Handles complete payroll calculation including working days and unpaid leave ded
 from decimal import Decimal
 from datetime import date, timedelta
 from django.db import transaction, models
-from apps.payroll.models import PayrollRun, Payslip, PayslipComponent, EmployeeSalaryStructure
+from apps.payroll.models import PayrollRun, PayrollStatus, Payslip, PayslipComponent, EmployeeSalaryStructure
 from apps.organization.models import Employee
-from apps.leaves.models import LeaveRequest, LeaveType, LeaveStatus
+from apps.leaves.models import LeaveRequest, LeaveType, LeaveRequestStatus
 from apps.base.utils import calculate_working_days
 
 
@@ -40,7 +40,7 @@ class PayrollProcessor:
         Returns: dict with processing results
         """
         # Update status to PROCESSING
-        self.payroll_run.status = PayrollRun.Status.PROCESSING
+        self.payroll_run.status = PayrollStatus.PROCESSING
         self.payroll_run.save()
         
         try:
@@ -73,7 +73,7 @@ class PayrollProcessor:
                     payslips_created += 1
             
             # Update status to COMPLETED
-            self.payroll_run.status = PayrollRun.Status.COMPLETED
+            self.payroll_run.status = PayrollStatus.COMPLETED
             self.payroll_run.total_employees = payslips_created
             self.payroll_run.save()
             
@@ -85,7 +85,7 @@ class PayrollProcessor:
             
         except Exception as e:
             # Update status to FAILED
-            self.payroll_run.status = PayrollRun.Status.FAILED
+            self.payroll_run.status = PayrollStatus.FAILED
             self.payroll_run.save()
             raise e
     
@@ -176,7 +176,7 @@ class PayrollProcessor:
         leaves = LeaveRequest.objects.filter(
             employee=employee,
             leave_type=LeaveType.UNPAID,
-            status=LeaveStatus.APPROVED,
+            status=LeaveRequestStatus.APPROVED,
             start_date__year=self.year,
             start_date__month=self.month
         )
