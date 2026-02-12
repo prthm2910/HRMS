@@ -172,14 +172,14 @@ class TaxRule(BaseTemplateModel):
         super().save(*args, **kwargs)
 
 
+class PayrollStatus(models.TextChoices):
+    DRAFT = 'DRAFT', 'Draft'
+    PROCESSING = 'PROCESSING', 'Processing'
+    COMPLETED = 'COMPLETED', 'Completed'
+    FAILED = 'FAILED', 'Failed'
+
+
 class PayrollRun(BaseTemplateModel):
-    """Monthly payroll processing record"""
-    
-    class Status(models.TextChoices):
-        DRAFT = 'DRAFT', 'Draft'
-        PROCESSING = 'PROCESSING', 'Processing'
-        COMPLETED = 'COMPLETED', 'Completed'
-        FAILED = 'FAILED', 'Failed'
     
     # Auto-generated slug from month/year (primary business identifier)
     code = models.SlugField(
@@ -204,8 +204,8 @@ class PayrollRun(BaseTemplateModel):
     )
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.DRAFT
+        choices=PayrollStatus.choices,
+        default=PayrollStatus.DRAFT
     )
     processed_at = models.DateTimeField(null=True, blank=True)
     processed_by = models.ForeignKey(
