@@ -190,7 +190,7 @@ class Holiday(BaseTemplateModel):
         return f"{self.name} - {self.date}{region_str}{recurring_str}"
 
 
-class ExtractionStatus(models.TextChoices):
+class HolidayExtractionStatus(models.TextChoices):
     """Holiday upload extraction status choices"""
     SUCCESS = 'SUCCESS', 'Success'
     FAILED = 'FAILED', 'Failed'
@@ -219,8 +219,8 @@ class HolidayUpload(BaseTemplateModel):
     )
     extraction_status = models.CharField(
         max_length=20,
-        choices=ExtractionStatus.choices,
-        default=ExtractionStatus.PENDING,
+        choices=HolidayExtractionStatus.choices,
+        default=HolidayExtractionStatus.PENDING,
         help_text="Status of the OCR extraction"
     )
     error_message = models.TextField(
