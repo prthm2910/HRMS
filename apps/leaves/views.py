@@ -11,7 +11,7 @@ from apps.base.views import (
     BaseCreateOnlyAuthenticatedViewSet,
     DeleteMixin
 )
-from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus, LeaveType
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -58,7 +58,7 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         # Existing status filter
         status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter.upper() in dict(LeaveStatus.choices):
+        if status_filter and status_filter.upper() in dict(LeaveRequestStatus.choices):
             queryset = queryset.filter(status=status_filter.upper())
         
         # NEW: Month filter
@@ -104,7 +104,7 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         status_filter = self.request.query_params.get('status', 'pending')
         if status_filter.lower() != 'all':
-            if status_filter.upper() in dict(LeaveStatus.choices):
+            if status_filter.upper() in dict(LeaveRequestStatus.choices):
                 queryset = queryset.filter(status=status_filter.upper())
         
         return queryset.order_by('-created_at')

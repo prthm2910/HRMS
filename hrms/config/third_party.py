@@ -11,4 +11,8 @@ SPECTACULAR_CONFIG = {
     'DESCRIPTION': 'Human Resource Management System API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'PayrollStatus': 'apps.payroll.models.PayrollStatus',
+        'LeaveRequestStatus': 'apps.leaves.models.LeaveRequestStatus',
+    },
 }

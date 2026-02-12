@@ -20,7 +20,7 @@ class HalfDayPeriod(models.TextChoices):
     SECOND_HALF = 'SECOND_HALF', 'Second Half'
 
 
-class LeaveStatus(models.TextChoices):
+class LeaveRequestStatus(models.TextChoices):
     """Leave request status choices"""
     PENDING = 'PENDING', 'Pending'
     APPROVED = 'APPROVED', 'Approved'
@@ -55,7 +55,7 @@ class LeaveRequest(BaseTemplateModel):
     reason = models.TextField(help_text="Reason for leave")
     
     # 4. Approval Workflow
-    status = models.CharField(max_length=20, choices=LeaveStatus.choices, default=LeaveStatus.PENDING)
+    status = models.CharField(max_length=20, choices=LeaveRequestStatus.choices, default=LeaveRequestStatus.PENDING)
     
     action_by = models.ForeignKey(
         Employee, 

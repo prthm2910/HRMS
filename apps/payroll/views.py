@@ -17,6 +17,7 @@ from apps.payroll.models import (
     EmployeeSalaryStructure,
     TaxRule,
     PayrollRun,
+    PayrollStatus,
     Payslip,
     PayslipComponent,
     PayrollAutomationConfig
@@ -106,7 +107,7 @@ class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
         
         payroll_run = self.get_object()
         
-        if payroll_run.status == PayrollRun.Status.COMPLETED:
+        if payroll_run.status == PayrollStatus.COMPLETED:
             return Response(
                 {'error': 'Payroll already processed'},
                 status=status.HTTP_400_BAD_REQUEST

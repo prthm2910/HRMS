@@ -89,7 +89,7 @@ class AIOperationType(models.TextChoices):
     GENERATION = 'GENERATION', 'Content Generation'
 
 
-class AIOperationStatus(models.TextChoices):
+class AIOperationLogStatus(models.TextChoices):
     """AI operation status choices"""
     SUCCESS = 'SUCCESS', 'Success'
     FAILED = 'FAILED', 'Failed'
@@ -136,8 +136,8 @@ class AIOperationLog(models.Model):
     # Status and performance
     status = models.CharField(
         max_length=20,
-        choices=AIOperationStatus.choices,
-        default=AIOperationStatus.PENDING
+        choices=AIOperationLogStatus.choices,
+        default=AIOperationLogStatus.PENDING
     )
     
     processing_time_seconds = models.DecimalField(
