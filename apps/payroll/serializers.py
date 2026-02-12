@@ -10,6 +10,8 @@ from apps.payroll.models import (
     PayrollAutomationConfig
 )
 from apps.organization.serializers import EmployeeSerializer
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 
 
 class SalaryComponentSerializer(serializers.ModelSerializer):
@@ -205,6 +207,7 @@ class PayslipSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
     
+    @extend_schema_field(OpenApiTypes.STR)
     def get_unpaid_leaves_url(self, obj):
         """
         Return URL to view unpaid leaves if deductions exist
@@ -215,11 +218,23 @@ class PayslipSerializer(serializers.ModelSerializer):
         return None
 
 
+class PayrollRunDetailSerializer(serializers.ModelSerializer):
+    """Detailed payroll run serializer with nested user info"""
+    from apps.users.serializers import UserBasicSerializer
+    
+    processed_by = UserBasicSerializer(read_only=True)
+    
+    class Meta:
+        model = PayrollRun
+        fields = '__all__'
+
+
 class PayslipDetailSerializer(PayslipSerializer):
     """Detailed payslip serializer with all nested data"""
+    payroll_run = PayrollRunDetailSerializer(read_only=True)
     
     class Meta(PayslipSerializer.Meta):
-        depth = 2
+        pass
 
 
 class PayrollAutomationConfigSerializer(serializers.ModelSerializer):
