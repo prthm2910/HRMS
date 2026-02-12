@@ -16,7 +16,12 @@ class IsAdminWriteOnly(permissions.BasePermission):
             return True
             
         # Write operations require superuser status
-        return request.user.is_superuser
+        is_superuser = request.user.is_superuser
+        if not is_superuser:
+            # Set custom message if provided by the view
+            self.message = getattr(view, 'admin_forbidden_message', "Forbidden: Only Administrators have permission to perform this action.")
+            
+        return is_superuser
 
 
 class IsAdminUserOrReadOnly(permissions.BasePermission):
@@ -32,4 +37,9 @@ class IsAdminUserOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
             
-        return request.user.is_staff or request.user.is_superuser
+        is_admin = request.user.is_staff or request.user.is_superuser
+        if not is_admin:
+            # Set custom message if provided by the view
+            self.message = getattr(view, 'admin_forbidden_message', "Forbidden: You do not have permission to perform this action.")
+            
+        return is_admin
