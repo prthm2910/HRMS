@@ -2,15 +2,17 @@
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
 
 # ------------------------------------------------------------------
 # CONCEPT: Custom User Model
 # ------------------------------------------------------------------
-class User(AbstractUser, BaseTemplateModel):
-    # Inheritance:
-    # - AbstractUser: Gives us username, password, groups, permissions (Django standard).
-    # - BaseTemplateModel: Gives us UUID, created_at, is_deleted (Our custom rules).
+class User(AbstractUser, BaseModel):
+    """
+    Custom User Model combining Django's built-in auth with our custom fields.
+    - AbstractUser: Gives us username, password, email, etc. (Django's built-in).
+    - BaseModel: Gives us UUID, created_at, is_deleted (Our custom rules).
+    """
 
     # Customization:
     # Django's default 'email' field is optional. We override it to be Unique & Required.

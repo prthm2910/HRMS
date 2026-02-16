@@ -100,7 +100,8 @@ def send_bulk_payslip_emails(payroll_run):
     Returns:
         dict: Summary of sent/failed emails
     """
-    payslips = payroll_run.payslips.all()
+    # Optimization: select_related prevents N+1 queries when accessing payslip.employee.user
+    payslips = payroll_run.payslips.select_related('employee__user').all()
     
     results = {
         'total': payslips.count(),

@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from apps.ai_services.services.base import BaseAIService
 from apps.ai_services.config import AIServiceConfig
 from apps.ai_services.schemas.ocr import HolidayExtraction
+from apps.audit.constants import AIOperationType, AIOperationLogStatus
 
 
 class GeminiOCRService(BaseAIService):
@@ -74,7 +75,7 @@ class GeminiOCRService(BaseAIService):
             self.stop_timer()
             
             result = {
-                'status': 'SUCCESS',
+                'status': AIOperationLogStatus.SUCCESS.value,
                 'extracted_holidays': all_holidays,
                 'total_count': len(all_holidays),
                 'has_validation_errors': has_errors,
@@ -88,7 +89,7 @@ class GeminiOCRService(BaseAIService):
                     user=user,
                     input_data={'image_name': image_file.name, 'size_bytes': image_file.size},
                     output_data={'holidays_count': len(all_holidays), 'has_errors': has_errors},
-                    status='SUCCESS',
+                    status=AIOperationLogStatus.SUCCESS.value,
                     processing_time_ms=self.get_processing_time(),
                     user_agent=user_agent,
                     path=path
@@ -106,7 +107,7 @@ class GeminiOCRService(BaseAIService):
                     user=user,
                     input_data={'image_name': image_file.name if image_file else 'unknown'},
                     output_data=None,
-                    status='FAILED',
+                    status=AIOperationLogStatus.FAILED.value,
                     processing_time_ms=self.get_processing_time(),
                     error_message=str(e),
                     user_agent=user_agent,
@@ -280,7 +281,7 @@ Return the data in JSON format as an array of objects with keys: `date`, `name`,
             processing_time_seconds = Decimal(str(processing_time_ms / 1000))
             
             log_ai_operation(
-                operation_type='OCR',
+                operation_type=AIOperationType.OCR.value,
                 user=user,
                 input_data=input_data,
                 output_data=output_data,

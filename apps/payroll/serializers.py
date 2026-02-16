@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timedelta
+from django.utils import timezone
 from rest_framework import serializers
 from apps.payroll.models import (
     SalaryComponent,
@@ -10,6 +11,7 @@ from apps.payroll.models import (
     PayrollAutomationConfig
 )
 from apps.organization.serializers import EmployeeSerializer
+from apps.leaves.models import LeaveRequestStatus
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 
@@ -40,8 +42,8 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
     component_details = SalaryComponentSerializer(source='salary_component', read_only=True)
     
-    # Default effective_from to today if not provided
-    effective_from = serializers.DateField(default=serializers.CreateOnlyDefault(date.today))
+    # Default effective_from_at to now if not provided
+    effective_from_at = serializers.DateTimeField(default=serializers.CreateOnlyDefault(timezone.now))
     
     class Meta:
         model = EmployeeSalaryStructure
@@ -53,8 +55,8 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             'salary_component',
             'component_details',
             'amount',
-            'effective_from',
-            'effective_to',
+            'effective_from_at',
+            'effective_to_at',
             'created_at',
             'updated_at'
         ]
@@ -69,19 +71,22 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
         
         employee = validated_data['employee']
         component = validated_data['salary_component']
-        new_effective_from = validated_data['effective_from']
+        new_effective_from = validated_data.get('effective_from_at')
         
+        if not new_effective_from:
+            new_effective_from = timezone.now()
+            
         # Find existing open structure for same employee+component
         old_structure = EmployeeSalaryStructure.objects.filter(
             employee=employee,
             salary_component=component,
-            effective_to__isnull=True,
+            effective_to_at__isnull=True,
             is_deleted=False
         ).first()
         
-        if old_structure and old_structure.effective_from < new_effective_from:
-            # Auto-close old structure (1 day before new structure starts)
-            old_structure.effective_to = new_effective_from - timedelta(days=1)
+        if old_structure and old_structure.effective_from_at < new_effective_from:
+            # Auto-close old structure (1 second before new structure starts)
+            old_structure.effective_to_at = new_effective_from - timedelta(seconds=1)
             old_structure.save()
         
         # Create new structure
@@ -214,7 +219,7 @@ class PayslipSerializer(serializers.ModelSerializer):
         Provides transparency for leave deductions
         """
         if obj.leave_days_deducted and obj.leave_days_deducted > 0:
-            return f"/api/leaves/my-leave-requests/?month={obj.month}&year={obj.year}&leave_type=UNPAID&status=APPROVED"
+            return f"/api/leaves/my-leave-requests/?month={obj.month}&year={obj.year}&leave_type=UNPAID&status={LeaveRequestStatus.APPROVED.value}"
         return None
 
 

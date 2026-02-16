@@ -16,7 +16,7 @@ def recalculate_leaves_on_holiday_create(sender, instance, created, **kwargs):
     
     # Only recalculate for newly created holidays or when reactivating
     if created or kwargs.get('update_fields') and 'is_active' in kwargs.get('update_fields', []):
-        _recalculate_affected_leaves(instance.date, instance.region)
+        _recalculate_affected_leaves(instance.holiday_date.date(), instance.region)
 
 
 @receiver(post_delete, sender=Holiday)
@@ -25,7 +25,7 @@ def recalculate_leaves_on_holiday_delete(sender, instance, **kwargs):
     When a holiday is deleted, recalculate affected leave requests.
     This may increase leave duration for affected requests.
     """
-    _recalculate_affected_leaves(instance.date, instance.region)
+    _recalculate_affected_leaves(instance.holiday_date.date(), instance.region)
 
 
 def _recalculate_affected_leaves(holiday_date, region=None):
@@ -40,14 +40,14 @@ def _recalculate_affected_leaves(holiday_date, region=None):
     - Logs changes in terminal
     """
     from apps.leaves.models import LeaveRequest, LeaveBalance
-    from apps.base.utils import calculate_working_days
+    from apps.base.utils import calculate_working_and_non_working_days
     
     # Find affected leave requests
     affected_leaves = LeaveRequest.objects.filter(
         status__in=['PENDING', 'APPROVED'],
-        start_date__lte=holiday_date,
-        end_date__gte=holiday_date,
-        start_date__gte=date.today(),  # Only future leaves
+        started_at__date__lte=holiday_date,
+        ended_at__gte=holiday_date,
+        started_at__date__gte=date.today(),  # Only future leaves
         is_deleted=False
     )
     
@@ -64,11 +64,13 @@ def _recalculate_affected_leaves(holiday_date, region=None):
         old_duration = leave.duration
         
         # Recalculate new duration
-        new_duration, excluded_holidays = calculate_working_days(
-            leave.start_date,
-            leave.end_date,
+        res = calculate_working_and_non_working_days(
+            leave.started_at.date(),
+            leave.ended_at.date(),
             region=region
         )
+        new_duration = res['working_days']
+        excluded_holidays = res['holidays']
         new_duration = float(new_duration)
         
         # If duration changed, update leave balance
@@ -86,7 +88,7 @@ def _recalculate_affected_leaves(holiday_date, region=None):
                 
                 print(f"\n✅ Updated Leave Request ID: {leave.id}")
                 print(f"   Employee: {leave.employee.employee_id}")
-                print(f"   Period: {leave.start_date} to {leave.end_date}")
+                print(f"   Period: {leave.started_at.date()} to {leave.ended_at.date()}")
                 print(f"   Old Duration: {old_duration} days")
                 print(f"   New Duration: {new_duration} days")
                 print(f"   Credited Back: {duration_diff} days")

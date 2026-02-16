@@ -4,12 +4,13 @@ Handles complete payroll calculation including working days and unpaid leave ded
 """
 
 from decimal import Decimal
+from django.utils import timezone
 from datetime import date, timedelta
 from django.db import transaction, models
-from apps.payroll.models import PayrollRun, PayrollStatus, Payslip, PayslipComponent, EmployeeSalaryStructure
+from apps.payroll.models import PayrollRun, PayrollStatus, Payslip, PayslipComponent, EmployeeSalaryStructure, ComponentType
 from apps.organization.models import Employee
 from apps.leaves.models import LeaveRequest, LeaveType, LeaveRequestStatus
-from apps.base.utils import calculate_working_days
+from apps.base.utils import calculate_working_and_non_working_days
 
 
 class PayrollProcessor:
@@ -31,7 +32,8 @@ class PayrollProcessor:
         else:
             end_date = date(self.year, self.month + 1, 1) - timedelta(days=1)
         
-        self.working_days, _ = calculate_working_days(start_date, end_date)
+        res = calculate_working_and_non_working_days(start_date, end_date)
+        self.working_days = res['working_days']
     
     @transaction.atomic
     def process(self):
@@ -40,15 +42,16 @@ class PayrollProcessor:
         Returns: dict with processing results
         """
         # Update status to PROCESSING
-        self.payroll_run.status = PayrollStatus.PROCESSING
+        self.payroll_run.status = PayrollStatus.PROCESSING.value
         self.payroll_run.save()
         
         try:
-            # Get all active employees
+            # Get all active employees with related data preloaded
+            # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
             employees = Employee.objects.filter(
                 is_active=True,
                 is_deleted=False
-            )
+            ).select_related('user', 'department')
             
             payslips_created = 0
             
@@ -73,7 +76,7 @@ class PayrollProcessor:
                     payslips_created += 1
             
             # Update status to COMPLETED
-            self.payroll_run.status = PayrollStatus.COMPLETED
+            self.payroll_run.status = PayrollStatus.COMPLETED.value
             self.payroll_run.total_employees = payslips_created
             self.payroll_run.save()
             
@@ -85,7 +88,7 @@ class PayrollProcessor:
             
         except Exception as e:
             # Update status to FAILED
-            self.payroll_run.status = PayrollStatus.FAILED
+            self.payroll_run.status = PayrollStatus.FAILED.value
             self.payroll_run.save()
             raise e
     
@@ -97,7 +100,7 @@ class PayrollProcessor:
         # Get active salary structures for this month
         structures = EmployeeSalaryStructure.objects.filter(
             employee=employee,
-            effective_from__lte=date(self.year, self.month, 1),
+            effective_from_at__lte=timezone.now(),
             is_deleted=False
         ).filter(
             # Either no end date OR end date is after this month
@@ -125,13 +128,13 @@ class PayrollProcessor:
                 'amount': amount
             }
             
-            if component.component_type == 'EARNING':
+            if component.component_type == ComponentType.EARNING.value:
                 earnings.append(component_data)
                 gross_salary += amount
-            elif component.component_type == 'DEDUCTION':
+            elif component.component_type == ComponentType.DEDUCTION.value:
                 deductions.append(component_data)
                 total_deductions += amount
-            elif component.component_type == 'BONUS':
+            elif component.component_type == ComponentType.BONUS.value:
                 bonuses.append(component_data)
                 gross_salary += amount
         
@@ -175,10 +178,10 @@ class PayrollProcessor:
         # Get unpaid approved leaves for this month
         leaves = LeaveRequest.objects.filter(
             employee=employee,
-            leave_type=LeaveType.UNPAID,
-            status=LeaveRequestStatus.APPROVED,
-            start_date__year=self.year,
-            start_date__month=self.month
+            leave_type=LeaveType.UNPAID.value,
+            status=LeaveRequestStatus.APPROVED.value,
+            started_at__year=self.year,
+            started_at__month=self.month
         )
         
         # Filter to only working days
@@ -200,38 +203,56 @@ class PayrollProcessor:
             leave_days_deducted=salary_data['leave_days_deducted']
         )
         
-        # Create payslip components
+        # Create payslip components using bulk_create for efficiency
+        # Optimization: bulk_create reduces queries from 10N to 1 (where N = number of components)
+        components_to_create = []
+        
+        # Add earnings
         for earning in salary_data['earnings']:
-            PayslipComponent.objects.create(
-                payslip=payslip,
-                component_name=earning['component'].name,
-                component_type='EARNING',
-                amount=earning['amount']
+            components_to_create.append(
+                PayslipComponent(
+                    payslip=payslip,
+                    component_name=earning['component'].name,
+                    component_type='EARNING',
+                    amount=earning['amount']
+                )
             )
         
+        # Add deductions
         for deduction in salary_data['deductions']:
-            PayslipComponent.objects.create(
-                payslip=payslip,
-                component_name=deduction['component'].name,
-                component_type='DEDUCTION',
-                amount=deduction['amount']
+            components_to_create.append(
+                PayslipComponent(
+                    payslip=payslip,
+                    component_name=deduction['component'].name,
+                    component_type='DEDUCTION',
+                    amount=deduction['amount']
+                )
             )
         
+        # Add bonuses
         for bonus in salary_data['bonuses']:
-            PayslipComponent.objects.create(
-                payslip=payslip,
-                component_name=bonus['component'].name,
-                component_type='BONUS',
-                amount=bonus['amount']
+            components_to_create.append(
+                PayslipComponent(
+                    payslip=payslip,
+                    component_name=bonus['component'].name,
+                    component_type='BONUS',
+                    amount=bonus['amount']
+                )
             )
         
         # Add leave deduction as a component if applicable
         if salary_data['leave_deduction'] > 0:
-            PayslipComponent.objects.create(
-                payslip=payslip,
-                component_name='Unpaid Leave Deduction',
-                component_type='DEDUCTION',
-                amount=salary_data['leave_deduction']
+            components_to_create.append(
+                PayslipComponent(
+                    payslip=payslip,
+                    component_name='Unpaid Leave Deduction',
+                    component_type='DEDUCTION',
+                    amount=salary_data['leave_deduction']
+                )
             )
+        
+        # Bulk create all components in a single query
+        if components_to_create:
+            PayslipComponent.objects.bulk_create(components_to_create)
         
         return payslip

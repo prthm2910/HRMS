@@ -1,16 +1,17 @@
 from rest_framework import serializers
 from apps.projects.models import Project, ProjectMember
-from apps.base.serializers import BaseTemplateSerializer
+from apps.projects.constants import ProjectType, Position
+from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer
 
-class ProjectMemberSerializer(BaseTemplateSerializer):
+class ProjectMemberSerializer(BaseSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
 
     class Meta:
         model = ProjectMember
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'project', 'employee', 'employee_details', 'role', 
-            'position', 'date_of_joining', 'date_of_leaving'
+            'position', 'joined_at', 'left_at'
         ]
 
     def validate(self, attrs):
@@ -43,7 +44,7 @@ class ParentProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = ['id', 'name', 'department_details', 'project_type', 'project_type_display']
 
-class ProjectSerializer(BaseTemplateSerializer):
+class ProjectSerializer(BaseSerializer):
     department_details = DepartmentSerializer(source='department', read_only=True)
     members = ProjectMemberSerializer(many=True, read_only=True)
     
@@ -68,9 +69,9 @@ class ProjectSerializer(BaseTemplateSerializer):
 
     class Meta:
         model = Project
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'department', 'department_details', 'name', 'description', 
-            'project_type', 'start_date', 'end_date', 
+            'project_type', 'started_at', 'ended_at', 
             'parent_project', 'parent_project_details', 'members'
         ]
     
@@ -148,21 +149,21 @@ class ProjectSerializer(BaseTemplateSerializer):
         
         # 5. Parent-Child Project Date Validation
         if parent_project:
-            start_date = attrs.get('start_date')
-            end_date = attrs.get('end_date')
+            start_date = attrs.get('started_at')
+            end_date = attrs.get('ended_at')
             
             # Validate start date
-            if start_date and parent_project.start_date:
-                if start_date < parent_project.start_date:
+            if start_date and parent_project.started_at:
+                if start_date < parent_project.started_at.date():
                     raise serializers.ValidationError({
-                        "start_date": f"Sub-project start date cannot be before parent project start date ({parent_project.start_date})."
+                        "started_at": f"Sub-project start date cannot be before parent project start date ({parent_project.started_at.date()})."
                     })
             
             # Validate end date (only if parent has an end date)
-            if end_date and parent_project.end_date:
-                if end_date > parent_project.end_date:
+            if end_date and parent_project.ended_at:
+                if end_date > parent_project.ended_at.date():
                     raise serializers.ValidationError({
-                        "end_date": f"Sub-project end date cannot be after parent project end date ({parent_project.end_date})."
+                        "ended_at": f"Sub-project end date cannot be after parent project end date ({parent_project.ended_at.date()})."
                     })
 
         return attrs

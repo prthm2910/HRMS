@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.base.serializers import BaseTemplateSerializer
+from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeBasicSerializer
 
 # Get the custom User model defined in models.py
@@ -9,7 +9,7 @@ User = get_user_model()
 # ------------------------------------------------------------------
 # 0. User Basic Serializer (For Nested Display)
 # ------------------------------------------------------------------
-class UserBasicSerializer(BaseTemplateSerializer):
+class UserBasicSerializer(BaseSerializer):
     """
     Lightweight serializer for displaying basic user info in nested contexts.
     Used by: AuditLogSerializer, EmployeeSerializer
@@ -23,14 +23,14 @@ class UserBasicSerializer(BaseTemplateSerializer):
 # ------------------------------------------------------------------
 # 1. User Serializer (For Profiles)
 # ------------------------------------------------------------------
-class UserSerializer(BaseTemplateSerializer):
+class UserSerializer(BaseSerializer):
     employee_profile = EmployeeBasicSerializer(read_only=True)
     
     class Meta:
         model = User
         # We explicitly list fields to expose in the API.
         # SECURITY: Never include 'password' here!
-        fields = BaseTemplateSerializer.Meta.fields + ['username', 'email', 'phone_number', 'bio', 'employee_profile']
+        fields = BaseSerializer.Meta.fields + ['username', 'email', 'phone_number', 'bio', 'employee_profile']
 
 
 # ------------------------------------------------------------------

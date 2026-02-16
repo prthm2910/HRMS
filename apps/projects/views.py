@@ -16,12 +16,12 @@ class ProjectViewSet(DeleteMixin, RoleFullViewSet):
     - HOD: Full Access to Projects in their Department. Department is auto-detected.
     - Employee: View Projects they are a member of. Cannot create projects.
     """
-    queryset = Project.objects.filter(is_deleted=False)
+    queryset = Project.objects.filter(is_deleted=False).select_related('department', 'parent_project')
     serializer_class = ProjectSerializer
     permission_classes = [IsProjectAdminOrHODOrReadOnly]  # Custom Permission
     filterset_fields = ['department', 'project_type', 'parent_project']
     search_fields = ['name', 'department__name']
-    ordering_fields = ['start_date', 'created_at']
+    ordering_fields = ['started_at', 'created_at']
 
     def get_standard_user_queryset(self, employee_profile):
         # 1. HOD Logic: If user is HOD, return all projects in their department
@@ -40,12 +40,12 @@ class ProjectMemberViewSet(DeleteMixin, RoleFullViewSet):
     - HOD: Full Access to Members in their Department's Projects.
     - Employee: View Members in their own Projects.
     """
-    queryset = ProjectMember.objects.filter(is_deleted=False)
+    queryset = ProjectMember.objects.filter(is_deleted=False).select_related('project', 'employee__user')
     serializer_class = ProjectMemberSerializer
     permission_classes = [IsProjectAdminOrHODOrReadOnly]  # Custom Permission
     filterset_fields = ['project', 'employee', 'position', 'role']
     search_fields = ['employee__user__username', 'project__name', 'role']
-    ordering_fields = ['date_of_joining']
+    ordering_fields = ['joined_at']
 
     def get_standard_user_queryset(self, employee_profile):
         # 1. HOD Logic: Return members of all projects in their department
@@ -53,7 +53,4 @@ class ProjectMemberViewSet(DeleteMixin, RoleFullViewSet):
             dept = employee_profile.hod_profile.department
             return self.queryset.filter(project__department=dept)
         
-        # 2. Employee Logic: Return members of projects they belong to
-        # (i.e., see their co-workers)
-        my_projects = Project.objects.filter(members__employee=employee_profile)
-        return self.queryset.filter(project__in=my_projects).distinct()
+        return self.queryset.filter(project__members__employee=employee_profile).distinct()

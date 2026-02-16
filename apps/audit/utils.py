@@ -51,11 +51,12 @@ def log_ai_operation(operation_type, user, input_data, output_data, status,
         AIOperationLog: The created AI operation log instance
     """
     from apps.audit.models import AuditLog, AIOperationLog
+    from apps.audit.constants import AuditAction
     
     # Create parent audit entry
     audit_entry = AuditLog.objects.create(
         actor=user,
-        action='AI_SERVICE',
+        action=AuditAction.CREATE.value,
         table_name='AIOperationLog',
         record_id=None,  # Will be set after AI log is created
         changes={'operation_type': operation_type, 'status': status},

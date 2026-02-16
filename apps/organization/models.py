@@ -2,10 +2,11 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
+from apps.organization.constants import EmploymentType
 
 
-class Department(BaseTemplateModel):
+class Department(BaseModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
 
@@ -18,15 +19,7 @@ class Department(BaseTemplateModel):
         db_table = 'departments'
 
 
-class EmploymentType(models.TextChoices):
-    """Employment type choices for Employee model"""
-    FULL_TIME = 'FULL_TIME', 'Full Time'
-    PART_TIME = 'PART_TIME', 'Part Time'
-    CONTRACT = 'CONTRACT', 'Contract'
-    INTERN = 'INTERN', 'Intern'
-
-
-class Employee(BaseTemplateModel):
+class Employee(BaseModel):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -53,12 +46,14 @@ class Employee(BaseTemplateModel):
     designation = models.CharField(max_length=100)
     employment_type = models.CharField(
         max_length=20, 
-        choices=EmploymentType.choices, 
-        default=EmploymentType.FULL_TIME
+        choices=EmploymentType.choices(), 
+        default=EmploymentType.FULL_TIME.value
     )
-    date_of_joining = models.DateField()
-
-    date_of_birth = models.DateField(null=True, blank=True)
+    # Employment details
+    joined_at = models.DateTimeField(help_text="Date and time when employee joined the organization")
+    
+    # Personal details
+    born_at = models.DateTimeField(null=True, blank=True, help_text="Date and time of birth")
     salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
 
     manager = models.ForeignKey(
@@ -106,7 +101,7 @@ class Employee(BaseTemplateModel):
         if self.manager and self.manager.manager == self:
             raise ValidationError("Circular reporting detected.")    
 
-class HOD(BaseTemplateModel):
+class HOD(BaseModel):
     """
     Head of Department.
     Links an Employee to a Department they manage.

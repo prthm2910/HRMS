@@ -60,10 +60,10 @@ class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFilterViewSet):
         'employee', 'salary_component'
     )
     serializer_class = EmployeeSalaryStructureSerializer
-    filterset_fields = ['employee', 'salary_component', 'effective_from']
+    filterset_fields = ['employee', 'salary_component', 'effective_from_at']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
-    ordering_fields = ['effective_from', 'amount', 'created_at']
-    ordering = ['-effective_from']
+    ordering_fields = ['effective_from_at', 'amount', 'created_at']
+    ordering = ['-effective_from_at']
 
 
 @extend_schema(tags=['Tax Rule'])

@@ -1,16 +1,8 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from apps.audit.constants import AuditAction, AIOperationType, AIOperationLogStatus
 
 User = get_user_model()
-
-
-class AuditAction(models.TextChoices):
-    """Audit log action choices"""
-    CREATE = 'CREATE', 'Create'
-    UPDATE = 'UPDATE', 'Update'
-    DELETE = 'DELETE', 'Delete'
-    HARD_DELETE = 'HARD_DELETE', 'Hard Delete'
-    AI_SERVICE = 'AI_SERVICE', 'AI Service Call'
 
 
 class AuditLog(models.Model):
@@ -25,7 +17,7 @@ class AuditLog(models.Model):
     )
 
     # What did they do?
-    action = models.CharField(max_length=20, choices=AuditAction.choices)
+    action = models.CharField(max_length=20, choices=AuditAction.choices())
     
     # Where did they do it? (Target Table & Row)
     table_name = models.CharField(max_length=50, help_text="The model name (e.g., 'Employee', 'LeaveRequest')")
@@ -80,20 +72,7 @@ class AuditLog(models.Model):
             return "Unknown Source"
 
 
-class AIOperationType(models.TextChoices):
-    """AI operation type choices"""
-    OCR = 'OCR', 'Optical Character Recognition'
-    NLP = 'NLP', 'Natural Language Processing'
-    VISION = 'VISION', 'Computer Vision'
-    CLASSIFICATION = 'CLASSIFICATION', 'Classification'
-    GENERATION = 'GENERATION', 'Content Generation'
-
-
-class AIOperationLogStatus(models.TextChoices):
-    """AI operation status choices"""
-    SUCCESS = 'SUCCESS', 'Success'
-    FAILED = 'FAILED', 'Failed'
-    PENDING = 'PENDING', 'Pending'
+# AI Operation Choices are moved to constants.py
 
 
 class AIOperationLog(models.Model):
@@ -136,8 +115,8 @@ class AIOperationLog(models.Model):
     # Status and performance
     status = models.CharField(
         max_length=20,
-        choices=AIOperationLogStatus.choices,
-        default=AIOperationLogStatus.PENDING
+        choices=AIOperationLogStatus.choices(),
+        default=AIOperationLogStatus.PENDING.value
     )
     
     processing_time_seconds = models.DecimalField(

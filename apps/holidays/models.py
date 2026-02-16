@@ -1,19 +1,21 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
+from apps.holidays.constants import HolidayExtractionStatus
 import uuid
 from datetime import date
 
 
-class Holiday(BaseTemplateModel):
+class Holiday(BaseModel):
     """
     Represents company holidays that are excluded from leave calculations.
     Supports recurring holidays (auto-generates future years) and regional holidays.
     """
     
-    date = models.DateField(
-        help_text="The date of the holiday"
+    
+    holiday_date = models.DateTimeField(
+        help_text="The date and time of the holiday"
     )
     name = models.CharField(
         max_length=200,
@@ -48,11 +50,11 @@ class Holiday(BaseTemplateModel):
         verbose_name = "Holiday"
         verbose_name_plural = "Holidays"
         db_table = 'holidays'
-        ordering = ['date']
+        ordering = ['holiday_date']
         # Prevent duplicate holidays on the same date for the same region
-        unique_together = [['date', 'region']]
+        unique_together = [['holiday_date', 'region']]
         indexes = [
-            models.Index(fields=['date', 'is_active', 'is_deleted']),
+            models.Index(fields=['holiday_date', 'is_active', 'is_deleted']),
             models.Index(fields=['recurring_group_id']),
         ]
 
@@ -63,7 +65,7 @@ class Holiday(BaseTemplateModel):
             raise ValidationError(_("Holiday name must be at least 3 characters long."))
         
         # Validate that holidays are not in the past
-        if self.date and self.date < date.today():
+        if self.holiday_date and self.holiday_date.date() < date.today():
             if not self.pk:
                 # Creating a new holiday in the past
                 raise ValidationError(_("Cannot create holidays for past dates."))
@@ -71,7 +73,7 @@ class Holiday(BaseTemplateModel):
                 # Updating an existing holiday - check if date was changed to past
                 try:
                     old_instance = Holiday.objects.get(pk=self.pk)
-                    if old_instance.date != self.date:
+                    if old_instance.holiday_date.date() != self.holiday_date.date():
                         raise ValidationError(_("Cannot change holiday date to a past date."))
                 except Holiday.DoesNotExist:
                     # New instance, treat as creation
@@ -119,23 +121,23 @@ class Holiday(BaseTemplateModel):
         if not self.recurring_group_id:
             return
         
-        current_year = self.date.year
+        current_year = self.holiday_date.year
         holidays_to_create = []
         
         for year_offset in range(1, 6):  # Next 5 years
             future_year = current_year + year_offset
-            future_date = self.date.replace(year=future_year)
+            future_date = self.holiday_date.replace(year=future_year)
             
             # Check if this holiday already exists
             exists = Holiday.objects.filter(
-                date=future_date,
+                holiday_date=future_date,
                 region=self.region
             ).exists()
             
             if not exists:
                 holidays_to_create.append(
                     Holiday(
-                        date=future_date,
+                        holiday_date=future_date,
                         name=self.name,
                         description=self.description,
                         is_recurring=True,
@@ -187,17 +189,10 @@ class Holiday(BaseTemplateModel):
     def __str__(self):
         region_str = f" ({self.region})" if self.region else ""
         recurring_str = " [Recurring]" if self.is_recurring else ""
-        return f"{self.name} - {self.date}{region_str}{recurring_str}"
+        return f"{self.name} - {self.holiday_date.date()}{region_str}{recurring_str}"
 
 
-class HolidayExtractionStatus(models.TextChoices):
-    """Holiday upload extraction status choices"""
-    SUCCESS = 'SUCCESS', 'Success'
-    FAILED = 'FAILED', 'Failed'
-    PENDING = 'PENDING', 'Pending'
-
-
-class HolidayUpload(BaseTemplateModel):
+class HolidayUpload(BaseModel):
     """
     Stores uploaded holiday images for audit trail.
     Images are stored in MEDIA_ROOT/holiday_uploads/ and only the path is stored in DB.
@@ -219,8 +214,8 @@ class HolidayUpload(BaseTemplateModel):
     )
     extraction_status = models.CharField(
         max_length=20,
-        choices=HolidayExtractionStatus.choices,
-        default=HolidayExtractionStatus.PENDING,
+        choices=HolidayExtractionStatus.choices(),
+        default=HolidayExtractionStatus.PENDING.value,
         help_text="Status of the OCR extraction"
     )
     error_message = models.TextField(

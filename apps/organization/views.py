@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from apps.base.views import (
     AdminWriteViewSet, 
@@ -88,10 +89,7 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
         if user.is_superuser:
             # Admin can view anyone's team
             if manager_id:
-                try:
-                    target_manager = Employee.objects.get(id=manager_id)
-                except Employee.DoesNotExist:
-                     return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
             else:
                 # If admin calls without ID, what to show? 
                 # Maybe show root level managers (those with no manager)? 
@@ -112,10 +110,7 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                 # We can check this recursively or simply check if they are in my downline.
                 # Simplified check for MVP: Allow valid drill-down.
                 
-                # Check if target manager exists
-                target_manager = Employee.objects.filter(id=manager_id).first()
-                if not target_manager:
-                    return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
 
                 # SECURITY: Verify target_manager is in my downline.
                 # Only allow viewing team of someone who is your direct or indirect report.
@@ -145,10 +140,11 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                 target_manager = myself
 
         # 2. Fetch Direct Reports & Annotate with THEIR reports count
+        # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
         direct_reports = Employee.objects.filter(
             manager=target_manager, 
             is_deleted=False
-        ).annotate(
+        ).select_related('user', 'department').annotate(
             direct_reports_count=Count('subordinates', filter=Q(subordinates__is_deleted=False))
         ).order_by('user__first_name')
 

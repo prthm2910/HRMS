@@ -2,21 +2,13 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
 from apps.organization.models import Employee
+from apps.payroll.constants import ComponentType, CalculationMethod, PayrollStatus
 
 
-class SalaryComponent(BaseTemplateModel):
+class SalaryComponent(BaseModel):
     """Define reusable salary components"""
-    
-    class ComponentType(models.TextChoices):
-        EARNING = 'EARNING', 'Earning'
-        DEDUCTION = 'DEDUCTION', 'Deduction'
-        BONUS = 'BONUS', 'Bonus'
-    
-    class CalculationMethod(models.TextChoices):
-        FIXED = 'FIXED', 'Fixed Amount'
-        PERCENTAGE = 'PERCENTAGE', 'Percentage of Base'
     
     # Auto-generated slug from name (primary business identifier)
     code = models.SlugField(
@@ -36,12 +28,12 @@ class SalaryComponent(BaseTemplateModel):
     name = models.CharField(max_length=100, unique=True)
     component_type = models.CharField(
         max_length=20,
-        choices=ComponentType.choices
+        choices=ComponentType.choices()
     )
     calculation_method = models.CharField(
         max_length=20,
-        choices=CalculationMethod.choices,
-        default=CalculationMethod.FIXED
+        choices=CalculationMethod.choices(),
+        default=CalculationMethod.FIXED.value
     )
     is_taxable = models.BooleanField(default=True)
     default_value = models.DecimalField(
@@ -73,7 +65,7 @@ class SalaryComponent(BaseTemplateModel):
         return f"{self.name} ({self.get_component_type_display()})"
 
 
-class EmployeeSalaryStructure(BaseTemplateModel):
+class EmployeeSalaryStructure(BaseModel):
     """Employee-specific salary breakdown"""
     
     # Business identifier (exposed in APIs)
@@ -98,19 +90,25 @@ class EmployeeSalaryStructure(BaseTemplateModel):
         decimal_places=2,
         validators=[MinValueValidator(0)]
     )
-    effective_from = models.DateField()
-    effective_to = models.DateField(null=True, blank=True)
+    effective_from_at = models.DateTimeField(
+        help_text="Date and time from which this salary structure is effective"
+    )
+    effective_to_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="Date and time when this salary structure expires"
+    )
     
     class Meta:
         db_table = 'employee_salary_structures'
-        ordering = ['-effective_from']
-        unique_together = ['employee', 'salary_component', 'effective_from']
+        ordering = ['-effective_from_at']
+        unique_together = ['employee', 'salary_component', 'effective_from_at']
     
     def __str__(self):
         return f"{self.employee.user.get_full_name()} - {self.salary_component.name}"
 
 
-class TaxRule(BaseTemplateModel):
+class TaxRule(BaseModel):
     """Configurable tax slabs"""
     
     # Auto-generated slug from name (primary business identifier)
@@ -172,14 +170,7 @@ class TaxRule(BaseTemplateModel):
         super().save(*args, **kwargs)
 
 
-class PayrollStatus(models.TextChoices):
-    DRAFT = 'DRAFT', 'Draft'
-    PROCESSING = 'PROCESSING', 'Processing'
-    COMPLETED = 'COMPLETED', 'Completed'
-    FAILED = 'FAILED', 'Failed'
-
-
-class PayrollRun(BaseTemplateModel):
+class PayrollRun(BaseModel):
     
     # Auto-generated slug from month/year (primary business identifier)
     code = models.SlugField(
@@ -204,8 +195,8 @@ class PayrollRun(BaseTemplateModel):
     )
     status = models.CharField(
         max_length=20,
-        choices=PayrollStatus.choices,
-        default=PayrollStatus.DRAFT
+        choices=PayrollStatus.choices(),
+        default=PayrollStatus.DRAFT.value
     )
     processed_at = models.DateTimeField(null=True, blank=True)
     processed_by = models.ForeignKey(
@@ -257,7 +248,7 @@ class PayrollRun(BaseTemplateModel):
         super().save(*args, **kwargs)
 
 
-class Payslip(BaseTemplateModel):
+class Payslip(BaseModel):
     """Individual employee payslip"""
     
     # Business identifier (exposed in APIs)
@@ -325,13 +316,10 @@ class Payslip(BaseTemplateModel):
 
 
 
-class PayslipComponent(BaseTemplateModel):
+class PayslipComponent(BaseModel):
     """Breakdown of each payslip"""
     
-    class ComponentType(models.TextChoices):
-        EARNING = 'EARNING', 'Earning'
-        DEDUCTION = 'DEDUCTION', 'Deduction'
-        BONUS = 'BONUS', 'Bonus'
+    # ComponentType is imported from apps.payroll.constants
     
     # Business identifier (exposed in APIs)
     payslip_component_id = models.UUIDField(
@@ -348,7 +336,7 @@ class PayslipComponent(BaseTemplateModel):
     component_name = models.CharField(max_length=100)
     component_type = models.CharField(
         max_length=20,
-        choices=ComponentType.choices
+        choices=ComponentType.choices()
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -360,7 +348,7 @@ class PayslipComponent(BaseTemplateModel):
         return f"{self.payslip} - {self.component_name}: {self.amount}"
 
 
-class PayrollAutomationConfig(BaseTemplateModel):
+class PayrollAutomationConfig(BaseModel):
     """Settings for automated payroll"""
     
     # Business identifier (exposed in APIs)
