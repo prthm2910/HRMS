@@ -20,11 +20,11 @@ class SalaryComponentAdmin(admin.ModelAdmin):
 
 @admin.register(EmployeeSalaryStructure)
 class EmployeeSalaryStructureAdmin(admin.ModelAdmin):
-    list_display = ['employee', 'salary_component', 'amount', 'effective_from', 'effective_to']
-    list_filter = ['salary_component', 'effective_from']
+    list_display = ['employee', 'salary_component', 'amount', 'effective_from_at', 'effective_to_at']
+    list_filter = ['salary_component', 'effective_from_at']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     raw_id_fields = ['employee', 'salary_component']
-    date_hierarchy = 'effective_from'
+    date_hierarchy = 'effective_from_at'
 
 
 @admin.register(TaxRule)
