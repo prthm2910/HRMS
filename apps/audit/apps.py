@@ -1,4 +1,7 @@
+import logging
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AuditConfig(AppConfig):
@@ -9,3 +12,4 @@ class AuditConfig(AppConfig):
     def ready(self):
         # This checks if the signals file exists and loads it into memory
         import apps.audit.signals
+        logger.info("Audit app ready | Signals and configurations loaded.")

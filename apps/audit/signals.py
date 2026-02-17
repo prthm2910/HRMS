@@ -47,6 +47,7 @@ def capture_old_state(sender, instance, **kwargs):
         try:
             old_instance = sender.objects.get(pk=instance.pk)
             instance._old_state = model_to_dict(old_instance)
+            logger.debug(f"Captured old state for {sender.__name__} record ID: {instance.pk}")
         except sender.DoesNotExist:
             instance._old_state = None
     else:
@@ -98,6 +99,7 @@ def log_create_or_update(sender, instance, created, **kwargs):
             user_agent=user_agent,
             path=path
         )
+        logger.info(f"Audit log entry created | Action: {action} | Table: {sender.__name__} | Record ID: {instance.pk}")
 
 @receiver(post_delete)
 def log_hard_delete(sender, instance, **kwargs):
@@ -121,3 +123,4 @@ def log_hard_delete(sender, instance, **kwargs):
         user_agent=data.get('user_agent'),
         path=data.get('path')
     )
+    logger.info(f"Audit log entry created | Action: HARD_DELETE | Table: {sender.__name__} | Record ID: {instance.pk}")

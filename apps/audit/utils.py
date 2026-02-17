@@ -1,6 +1,9 @@
 import threading
+import logging
 
 _thread_locals = threading.local()
+
+logger = logging.getLogger(__name__)
 
 
 def set_audit_data(user, user_agent, path):
@@ -80,4 +83,6 @@ def log_ai_operation(operation_type, user, input_data, output_data, status,
     audit_entry.record_id = str(ai_log.id)
     audit_entry.save()
     
+    user_id = user.id if user else 'System'
+    logger.info(f"AI Audit Log created | Type: {operation_type} | Status: {status} | User ID: {user_id} | AI Log ID: {ai_log.id}")
     return ai_log

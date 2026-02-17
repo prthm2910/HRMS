@@ -33,14 +33,17 @@ class AuditMiddleware:
         # 3. Capture Details
         user_agent = request.META.get('HTTP_USER_AGENT', '')
         path = request.path
+        user_id = user.id if user and user.is_authenticated else 'Anonymous'
 
         # 4. Save to Thread for Signals
+        logger.debug(f"Audit tracking started | Path: {path} | User ID: {user_id}")
         set_audit_data(user, user_agent, path)
 
         response = self.get_response(request)
 
         # 5. Cleanup
         clear_audit_data()
+        logger.debug(f"Audit tracking completed | Path: {path}")
 
         return response
 
