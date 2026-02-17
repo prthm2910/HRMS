@@ -48,14 +48,3 @@ class AIServiceConfig:
         }
         logger.info(f"OCR Service Config | Successfully loaded. Max Size: {config['max_file_size_mb']}MB | Supported: {len(config['supported_formats'])} formats")
         return config
-    
-    # Future: Add configurations for other AI services
-    # @staticmethod
-    # def get_nlp_config():
-    #     """Get NLP service configuration"""
-    #     pass
-    
-    # @staticmethod
-    # def get_vision_config():
-    #     """Get computer vision service configuration"""
-    #     pass
