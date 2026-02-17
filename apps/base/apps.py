@@ -1,4 +1,7 @@
+import logging
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 class BaseConfig(AppConfig):
@@ -8,4 +11,5 @@ class BaseConfig(AppConfig):
     
     def ready(self):
         """Import signals when app is ready"""
-        import apps.base.signals  # noqa
+        import apps.base.signals
+        logger.info("Base app ready | Foundation signals initialized.")

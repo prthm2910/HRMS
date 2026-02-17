@@ -2,6 +2,9 @@ from rest_framework import viewsets, permissions, mixins
 from apps.base.utils import get_employee_profile
 from apps.base.permissions import IsAdminUserOrReadOnly, IsAdminWriteOnly
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DeleteMixin:
@@ -31,15 +34,18 @@ class DeleteMixin:
         
         # Hard Delete: Superuser + Flag
         if self.request.user.is_superuser and force:
+            logger.info(f"Hard deletion executed | Table: {instance._meta.model_name} | Record ID: {instance.pk} | Initiator ID: {self.request.user.id}")
             instance.delete()
         # Soft Delete: Default
         else:
+            logger.info(f"Soft deletion executed | Table: {instance._meta.model_name} | Record ID: {instance.pk} | Initiator ID: {self.request.user.id}")
             instance.is_deleted = True
             instance.is_active = False
             instance.save()
             
             # Also deactivate associated user accounts if they exist (e.g. for Employee)
             if hasattr(instance, 'user') and instance.user:
+                logger.debug(f"Deactivating associated user account | User ID: {instance.user.id}")
                 instance.user.is_active = False
                 instance.user.save()
 
@@ -134,14 +140,17 @@ class RoleFilteredMixin:
         
         # 1. Admin/Staff bypass
         if user.is_superuser or user.is_staff:
+            logger.debug(f"Role Filter Bypass | Table: {self.get_queryset_model().__name__} | User ID: {user.id} | Role: Admin/Staff")
             return self.get_admin_queryset()
         
         # 2. Get profile for regular users
         employee_profile = get_employee_profile(user)
         if not employee_profile:
+            logger.warning(f"Role Filter Denied | Table: {self.get_queryset_model().__name__} | User ID: {user.id} | Reason: No Employee Profile")
             return self.get_queryset_model().objects.none()
 
         # 3. Apply standard role-based filtering
+        logger.debug(f"Applying Role Filtering | Table: {self.get_queryset_model().__name__} | User ID: {user.id} | Employee ID: {employee_profile.pk}")
         return self.get_standard_user_queryset(employee_profile)
 
     def get_queryset_model(self):

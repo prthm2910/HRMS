@@ -2,11 +2,13 @@
 Signal handlers for BaseModel to auto-populate created_by and updated_by fields.
 Uses existing audit infrastructure (get_audit_data) to retrieve user from thread-local storage.
 """
-
+import logging
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from apps.base.models import BaseModel
 from apps.base.utils import get_audit_data
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(pre_save)
@@ -35,9 +37,13 @@ def populate_audit_fields(sender, instance, **kwargs):
     if not user:
         return
     
+    user_id = user.id if hasattr(user, 'id') else 'System'
+    
     # Set created_by only on creation (when pk is None)
     if instance.pk is None and not instance.created_by:
+        logger.debug(f"Auto-populating created_by | Model: {sender.__name__} | User ID: {user_id}")
         instance.created_by = user
     
     # Always update updated_by
+    logger.debug(f"Auto-populating updated_by | Model: {sender.__name__} | User ID: {user_id}")
     instance.updated_by = user

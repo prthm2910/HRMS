@@ -4,6 +4,9 @@ Common utility functions used across the HRMS application.
 from datetime import timedelta
 import threading
 import calendar
+import logging
+
+logger = logging.getLogger(__name__)
 
 _thread_locals = threading.local()
 
@@ -140,6 +143,10 @@ def calculate_working_and_non_working_days(start_date, end_date, region=None):
             
         details.append(day_info)
         
+    logger.info(
+        f"Working days calculated | Range: {start_date} to {end_date} | "
+        f"Working: {working_days} | Holidays: {holiday_count} | Weekends: {weekend_count}"
+    )
     return {
         'working_days': working_days,
         'non_working_days': weekend_count + holiday_count,
@@ -241,6 +248,8 @@ def get_employee_profile(user):
 
 def set_audit_data(user, user_agent, path):
     """Store user, user_agent, and path in the current thread."""
+    user_id = user.id if user and user.is_authenticated else 'Anonymous'
+    logger.debug(f"Persistence layer: Setting audit context | User ID: {user_id} | Path: {path}")
     _thread_locals.current_user = user
     _thread_locals.current_user_agent = user_agent
     _thread_locals.current_path = path  # <--- Store the path
