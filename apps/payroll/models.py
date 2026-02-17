@@ -1,3 +1,4 @@
+import logging
 import uuid
 from django.db import models
 from django.conf import settings
@@ -5,6 +6,8 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.base.models import BaseModel
 from apps.organization.models import Employee
 from apps.payroll.constants import ComponentType, CalculationMethod, PayrollStatus
+
+logger = logging.getLogger(__name__)
 
 
 class SalaryComponent(BaseModel):
@@ -48,6 +51,7 @@ class SalaryComponent(BaseModel):
     
     def save(self, *args, **kwargs):
         # Auto-generate code from name if not provided
+        is_new = self._state.adding
         if not self.code:
             from django.utils.text import slugify
             self.code = slugify(self.name)
@@ -58,8 +62,11 @@ class SalaryComponent(BaseModel):
             while SalaryComponent.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for salary component | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New salary component created | Code: {self.code} | Type: {self.component_type}")
     
     def __str__(self):
         return f"{self.name} ({self.get_component_type_display()})"
@@ -156,6 +163,7 @@ class TaxRule(BaseModel):
     
     def save(self, *args, **kwargs):
         # Auto-generate code from name if not provided
+        is_new = self._state.adding
         if not self.code:
             from django.utils.text import slugify
             self.code = slugify(self.name)
@@ -166,8 +174,11 @@ class TaxRule(BaseModel):
             while TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for tax rule | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New tax rule created | Code: {self.code} | Country: {self.country}")
 
 
 class PayrollRun(BaseModel):
@@ -231,6 +242,7 @@ class PayrollRun(BaseModel):
     
     def save(self, *args, **kwargs):
         """Auto-generate code from month/year if not provided"""
+        is_new = self._state.adding
         if not self.code:
             from apps.base.utils import get_month_name
             from django.utils.text import slugify
@@ -244,8 +256,11 @@ class PayrollRun(BaseModel):
             while PayrollRun.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-v{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for payroll run | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New payroll run initialized | Code: {self.code} | Month: {self.month} | Year: {self.year}")
 
 
 class Payslip(BaseModel):
@@ -302,6 +317,7 @@ class Payslip(BaseModel):
         Generate PDF payslip using hybrid approach (WeasyPrint + ReportLab)
         Saves the PDF to the pdf_file field
         """
+        logger.info(f"Initiating PDF generation for payslip | ID: {self.payslip_id} | Employee: {self.employee.employee_id}")
         from django.core.files.base import ContentFile
         from apps.payroll.services.pdf_generator import generate_payslip_pdf
         

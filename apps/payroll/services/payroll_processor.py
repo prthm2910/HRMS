@@ -3,6 +3,8 @@ Payroll Processing Service
 Handles complete payroll calculation including working days and unpaid leave deductions
 """
 
+import logging
+
 from decimal import Decimal
 from django.utils import timezone
 from datetime import date, timedelta
@@ -11,6 +13,8 @@ from apps.payroll.models import PayrollRun, PayrollStatus, Payslip, PayslipCompo
 from apps.organization.models import Employee
 from apps.leaves.models import LeaveRequest, LeaveType, LeaveRequestStatus
 from apps.base.utils import calculate_working_and_non_working_days
+
+logger = logging.getLogger(__name__)
 
 
 class PayrollProcessor:
@@ -34,6 +38,7 @@ class PayrollProcessor:
         
         res = calculate_working_and_non_working_days(start_date, end_date)
         self.working_days = res['working_days']
+        logger.info(f"Initialized PayrollProcessor for Month: {self.month} | Year: {self.year} | System Working Days: {self.working_days}")
     
     @transaction.atomic
     def process(self):
@@ -42,6 +47,7 @@ class PayrollProcessor:
         Returns: dict with processing results
         """
         # Update status to PROCESSING
+        logger.info(f"Starting execution of payroll processing | Run ID: {self.payroll_run.id}")
         self.payroll_run.status = PayrollStatus.PROCESSING.value
         self.payroll_run.save()
         
@@ -65,6 +71,7 @@ class PayrollProcessor:
                 ).exists()
                 
                 if existing:
+                    logger.debug(f"Payslip already exists for employee {employee.employee_id}, skipping.")
                     continue  # Skip if already processed
                 
                 # Calculate salary for this employee
@@ -74,11 +81,13 @@ class PayrollProcessor:
                     # Create payslip
                     self._create_payslip(employee, salary_data)
                     payslips_created += 1
+                    logger.debug(f"Generated payslip for {employee.employee_id}. Net: {salary_data['net_salary']}")
             
             # Update status to COMPLETED
             self.payroll_run.status = PayrollStatus.COMPLETED.value
             self.payroll_run.total_employees = payslips_created
             self.payroll_run.save()
+            logger.info(f"Payroll processing COMPLETED for run {self.payroll_run.id}. Total payslips: {payslips_created}")
             
             return {
                 'success': True,
@@ -88,6 +97,7 @@ class PayrollProcessor:
             
         except Exception as e:
             # Update status to FAILED
+            logger.error(f"Payroll processing FAILED | Run ID: {self.payroll_run.id} | Error: {str(e)}", exc_info=True)
             self.payroll_run.status = PayrollStatus.FAILED.value
             self.payroll_run.save()
             raise e
@@ -109,6 +119,7 @@ class PayrollProcessor:
         ).select_related('salary_component')
         
         if not structures.exists():
+            logger.warning(f"Calculations skipped: No active salary structure found | Employee ID: {employee.employee_id} | Period: {self.month}/{self.year}")
             return None  # No salary structure for this employee
         
         # Calculate earnings and deductions
@@ -152,6 +163,7 @@ class PayrollProcessor:
             per_day_salary = gross_salary / Decimal(str(self.working_days))
             leave_deduction = per_day_salary * Decimal(str(leave_days_count))
             total_deductions += leave_deduction
+            logger.debug(f"Unpaid leave deduction computed | Employee ID: {employee.employee_id} | Days: {leave_days_count}")
         
         # Calculate net salary
         net_salary = gross_salary - total_deductions
@@ -202,6 +214,7 @@ class PayrollProcessor:
             net_salary=salary_data['net_salary'],
             leave_days_deducted=salary_data['leave_days_deducted']
         )
+        logger.debug(f"Payslip record created | Payslip ID: {payslip.payslip_id} | Employee ID: {employee.employee_id}")
         
         # Create payslip components using bulk_create for efficiency
         # Optimization: bulk_create reduces queries from 10N to 1 (where N = number of components)

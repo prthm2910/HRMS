@@ -3,10 +3,14 @@ Email Service for Payslip Delivery
 Sends payslip PDFs to employees via email
 """
 
+import logging
+
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class PayslipEmailService:
@@ -24,6 +28,7 @@ class PayslipEmailService:
         Send payslip email with PDF attachment
         Returns: True if successful, False otherwise
         """
+        logger.info(f"Initiating payslip email delivery | User ID: {self.user.id} | Employee ID: {self.employee.employee_id}")
         try:
             # Check if PDF exists
             if not self.payslip.pdf_file:
@@ -69,10 +74,11 @@ class PayslipEmailService:
             self.payslip.email_sent_at = timezone.now()
             self.payslip.save(update_fields=['email_sent_at'])
             
+            logger.info(f"Successfully sent payslip email | User ID: {self.user.id} | Employee ID: {self.employee.employee_id}")
             return True
             
         except Exception as e:
-            print(f"Failed to send payslip email: {str(e)}")
+            logger.error(f"Failed to send payslip email | User ID: {self.user.id} | Employee ID: {self.employee.employee_id} | Error: {str(e)}", exc_info=True)
             return False
 
 
@@ -121,4 +127,5 @@ def send_bulk_payslip_emails(payroll_run):
             results['failed'] += 1
             results['errors'].append(f"{payslip.employee.user.email}: {str(e)}")
     
+    logger.info(f"Bulk payslip emails summary | Run ID: {payroll_run.id} | Sent: {results['sent']} | Failed: {results['failed']} | Total: {results['total']}")
     return results

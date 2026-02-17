@@ -3,7 +3,7 @@ Hybrid PDF Generation Service for Payslips
 Combines WeasyPrint (HTML/CSS layout) + ReportLab (security enhancements)
 """
 
-import io
+import logging
 import qrcode
 from io import BytesIO
 from datetime import datetime
@@ -14,6 +14,9 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from PyPDF2 import PdfReader, PdfWriter
+
+
+logger = logging.getLogger(__name__)
 
 
 class HybridPDFGenerator:
@@ -35,11 +38,14 @@ class HybridPDFGenerator:
         Returns: PDF as bytes
         """
         # Step 1: Generate base PDF with WeasyPrint
+        logger.debug(f"Executing Step 1: Base PDF generation (WeasyPrint) | Payslip ID: {self.payslip.payslip_id}")
         base_pdf = self._generate_base_pdf()
         
         # Step 2: Add enhancements with ReportLab
+        logger.debug(f"Executing Step 2: Security enhancements (ReportLab) | Payslip ID: {self.payslip.payslip_id}")
         enhanced_pdf = self._add_enhancements(base_pdf)
         
+        logger.info(f"Hybrid PDF generation completed | Payslip ID: {self.payslip.payslip_id} | Employee ID: {self.employee.employee_id}")
         return enhanced_pdf
     
     def _generate_base_pdf(self) -> bytes:

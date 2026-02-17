@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+import logging
+from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 from apps.payroll.models import (
@@ -11,9 +12,12 @@ from apps.payroll.models import (
     PayrollAutomationConfig
 )
 from apps.organization.serializers import EmployeeSerializer
-from apps.leaves.models import LeaveRequestStatus
+from apps.leaves.constants import LeaveType, LeaveRequestStatus
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
+
+
+logger = logging.getLogger(__name__)
 
 
 class SalaryComponentSerializer(serializers.ModelSerializer):
@@ -67,7 +71,6 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
         Auto-close old salary structure when creating new one
         for same employee + salary_component combination
         """
-        from datetime import timedelta
         
         employee = validated_data['employee']
         component = validated_data['salary_component']
@@ -88,8 +91,10 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             # Auto-close old structure (1 second before new structure starts)
             old_structure.effective_to_at = new_effective_from - timedelta(seconds=1)
             old_structure.save()
+            logger.info(f"Existing salary structure auto-closed | Structure ID: {old_structure.id} | Employee ID: {employee.employee_id}")
         
         # Create new structure
+        logger.debug(f"Creating new salary structure | Employee ID: {employee.employee_id} | Component: {component.name}")
         return super().create(validated_data)
 
 
@@ -219,7 +224,7 @@ class PayslipSerializer(serializers.ModelSerializer):
         Provides transparency for leave deductions
         """
         if obj.leave_days_deducted and obj.leave_days_deducted > 0:
-            return f"/api/leaves/my-leave-requests/?month={obj.month}&year={obj.year}&leave_type=UNPAID&status={LeaveRequestStatus.APPROVED.value}"
+            return f"/api/leaves/my-leave-requests/?month={obj.month}&year={obj.year}&leave_type={LeaveType.UNPAID.value}&status={LeaveRequestStatus.APPROVED.value}"
         return None
 
 

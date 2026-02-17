@@ -1,4 +1,5 @@
 from drf_spectacular.utils import extend_schema
+import logging
 from rest_framework import status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -32,6 +33,8 @@ from apps.payroll.serializers import (
     PayslipComponentSerializer,
     PayrollAutomationConfigSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 @extend_schema(tags=['Salary Component'])
 class SalaryComponentViewSet(DeleteMixin, SuperadminFilterViewSet):
@@ -108,6 +111,7 @@ class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
         payroll_run = self.get_object()
         
         if payroll_run.status == PayrollStatus.COMPLETED:
+            logger.warning(f"Terminal state rejection: Attempted re-processing of completed payroll | Run Code: {payroll_run.code} | Requested By User ID: {request.user.id}")
             return Response(
                 {'error': 'Payroll already processed'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -117,6 +121,7 @@ class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
             # Use PayrollProcessor service
             from apps.payroll.services.payroll_processor import PayrollProcessor
             
+            logger.info(f"Authorized admin trigger: Start payroll processing | Run Code: {payroll_run.code} | Admin User ID: {request.user.id}")
             processor = PayrollProcessor(payroll_run)
             results = processor.process()
             
@@ -128,6 +133,7 @@ class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            logger.error(f"Execution failure: Payroll processing trigger | Run Code: {payroll_run.code} | Error: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Payroll processing failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -146,6 +152,7 @@ class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
             from apps.payroll.services.email_service import send_bulk_payslip_emails
             
             # Send emails
+            logger.info(f"Authorized admin trigger: Bulk payslip emails | Run Code: {payroll_run.code} | Admin User ID: {request.user.id}")
             results = send_bulk_payslip_emails(payroll_run)
             
             return Response({
@@ -200,6 +207,7 @@ class PayslipViewSet(DeleteMixin, SuperadminFullViewSet):
         
         try:
             # Generate PDF
+            logger.info(f"Authorized manual request: PDF generation | Payslip ID: {payslip.payslip_id} | Admin User ID: {request.user.id}")
             pdf_file = payslip.generate_pdf()
             
             return Response({
@@ -263,6 +271,7 @@ class PayslipViewSet(DeleteMixin, SuperadminFullViewSet):
             from apps.payroll.services.email_service import send_payslip_email
             
             # Send email
+            logger.info(f"Authorized manual request: Email send | Payslip ID: {payslip.payslip_id} | Admin User ID: {request.user.id}")
             success = send_payslip_email(payslip)
             
             if success:
@@ -272,6 +281,7 @@ class PayslipViewSet(DeleteMixin, SuperadminFullViewSet):
                     'sent_at': payslip.email_sent_at
                 }, status=status.HTTP_200_OK)
             else:
+                logger.error(f"Process failure: Manual email send failed | Payslip ID: {payslip.payslip_id}")
                 return Response(
                     {'error': 'Failed to send email'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
