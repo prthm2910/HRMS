@@ -5,11 +5,14 @@ Gemini AI-based OCR service for extracting structured data from images.
 """
 import google.generativeai as genai
 import json
-from typing import Dict, Any, List, Optional
+import logging
+from typing import Dict, Any, List
 from apps.ai_services.services.base import BaseAIService
 from apps.ai_services.config import AIServiceConfig
 from apps.ai_services.schemas.ocr import HolidayExtraction
 from apps.audit.constants import AIOperationType, AIOperationLogStatus
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiOCRService(BaseAIService):
@@ -26,71 +29,81 @@ class GeminiOCRService(BaseAIService):
     def __init__(self):
         """Initialize the Gemini OCR service"""
         super().__init__()
+        logger.debug("Initializing GeminiOCRService instance for vision-based extraction.")
         self.config = AIServiceConfig.get_ocr_config()
         self._configure_gemini()
     
     def _configure_gemini(self):
         """Configure Gemini AI with API key"""
+        logger.debug(f"Configuring Gemini AI model connection. Target model: {self.config['gemini']['model']}")
         gemini_config = self.config['gemini']
         genai.configure(api_key=gemini_config['api_key'])
         self.model = genai.GenerativeModel(gemini_config['model'])
+        logger.info(f"Gemini AI engine successfully configured with model: {gemini_config['model']}")
     
     def extract_holidays_from_image(self, image_file, user=None, user_agent=None, path=None) -> Dict[str, Any]:
         """
-        Extract holiday data from an uploaded image.
-        
-        Args:
-            image_file: Django UploadedFile object
-            user: User who initiated the request (for logging)
-            user_agent: User agent string (for logging)
-            path: Request path (for logging)
-            
-        Returns:
-            dict: Result containing extracted holidays, status, and metadata
+        Extract holiday data from an uploaded image with detailed logging.
         """
+        file_name = image_file.name if image_file else 'unknown_file'
+        logger.debug(f"Starting holiday extraction process for file: {file_name}")
         self.start_timer()
         
         try:
             # Validate input
+            logger.debug(f"Validating image file constraints for: {file_name}")
             self.validate_input(image_file=image_file)
             
             # Read image data
             image_data = image_file.read()
             
             # Generate prompt
+            logger.debug(f"Constructing extraction prompt for Gemini AI model: {self.config['gemini']['model']}")
             prompt = self._generate_prompt()
             
             # Call Gemini API
+            logger.info(f"Calling Gemini API for OCR extraction on file: {file_name}")
             response = self.model.generate_content([
                 prompt,
                 {"mime_type": image_file.content_type, "data": image_data}
             ])
             
             # Parse response
+            logger.debug("Gemini API response received. Parsing structured JSON output.")
             extracted_data = self._parse_response(response.text)
             
             # Validate extracted data
+            logger.debug(f"Validating {len(extracted_data)} candidate holiday entries against schema.")
             all_holidays, has_errors = self._validate_extracted_data(extracted_data)
             
             self.stop_timer()
+            processing_time = self.get_processing_time()
+            logger.info(f"OCR processing completed in {processing_time:.2f}ms. Total holidays extracted: {len(all_holidays)}")
+            
+            if has_errors:
+                logger.warning(f"Metadata: OCR for file '{file_name}' completed with partial schema validation errors.")
             
             result = {
                 'status': AIOperationLogStatus.SUCCESS.value,
                 'extracted_holidays': all_holidays,
                 'total_count': len(all_holidays),
                 'has_validation_errors': has_errors,
-                'processing_time_ms': self.get_processing_time(),
+                'processing_time_ms': processing_time,
                 'model_used': self.config['gemini']['model']
             }
             
             # Log to audit system
             if user:
-                self._log_to_audit(
+                logger.debug(f"Submitting AI operation audit log for User ID: {user.id}")
+                self.log_operation(
+                    operation_type=AIOperationType.OCR.value,
                     user=user,
-                    input_data={'image_name': image_file.name, 'size_bytes': image_file.size},
+                    input_data={'image_name': file_name, 'size_bytes': image_file.size},
                     output_data={'holidays_count': len(all_holidays), 'has_errors': has_errors},
                     status=AIOperationLogStatus.SUCCESS.value,
-                    processing_time_ms=self.get_processing_time(),
+                    model_used=self.config['gemini']['model'],
+                    processing_time_ms=processing_time,
+                    error_message=None,
                     user_agent=user_agent,
                     path=path
                 )
@@ -99,15 +112,18 @@ class GeminiOCRService(BaseAIService):
             
         except Exception as e:
             self.stop_timer()
+            logger.error(f"AI OCR processing failed: {str(e)}", exc_info=True)
             error_result = self.handle_error(e)
             
             # Log failure to audit system
             if user:
-                self._log_to_audit(
+                self.log_operation(
+                    operation_type=AIOperationType.OCR.value,
                     user=user,
                     input_data={'image_name': image_file.name if image_file else 'unknown'},
                     output_data=None,
                     status=AIOperationLogStatus.FAILED.value,
+                    model_used=self.config['gemini']['model'],
                     processing_time_ms=self.get_processing_time(),
                     error_message=str(e),
                     user_agent=user_agent,
@@ -224,6 +240,7 @@ Return the data in JSON format as an array of objects with keys: `date`, `name`,
         response_text = response_text.strip()
         
         # Parse JSON
+        logger.debug("Attempting to parse cleaned response text as JSON.")
         return json.loads(response_text)
     
     def _validate_extracted_data(self, extracted_data: List[Dict]) -> tuple:
@@ -252,49 +269,14 @@ Return the data in JSON format as an array of objects with keys: `date`, `name`,
             except Exception as e:
                 # Keep the invalid data but mark it with error
                 has_errors = True
+                logger.warning(f"Validation failed for extracted holiday at index {idx}: {str(e)}")
                 invalid_data = holiday_data.copy()
                 invalid_data['validation_error'] = str(e)
                 all_holidays.append(invalid_data)
         
         return all_holidays, has_errors
     
-    def _log_to_audit(self, user, input_data, output_data, status, processing_time_ms, 
-                     error_message=None, user_agent=None, path=None):
-        """
-        Log AI operation to audit system.
-        
-        Args:
-            user: Django User object
-            input_data: Summary of input data
-            output_data: Summary of output data
-            status: Operation status
-            processing_time_ms: Processing time in milliseconds (will be converted to seconds)
-            error_message: Error message if failed
-            user_agent: User agent string
-            path: Request path
-        """
-        from apps.audit.utils import log_ai_operation
-        from decimal import Decimal
-        
-        try:
-            # Convert milliseconds to seconds
-            processing_time_seconds = Decimal(str(processing_time_ms / 1000))
-            
-            log_ai_operation(
-                operation_type=AIOperationType.OCR.value,
-                user=user,
-                input_data=input_data,
-                output_data=output_data,
-                status=status,
-                processing_time_seconds=processing_time_seconds,
-                model_used=self.config['gemini']['model'],
-                error_message=error_message,
-                user_agent=user_agent,
-                path=path
-            )
-        except Exception as e:
-            # Don't fail the operation if logging fails
-            print(f"Failed to log AI operation: {e}")
+
     
     def process(self, *args, **kwargs) -> Dict[str, Any]:
         """
