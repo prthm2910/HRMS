@@ -1,7 +1,11 @@
+import logging
 from django.db import models
 from apps.base.models import BaseModel
 from apps.organization.models import Department, Employee
 from apps.projects.constants import ProjectType, Position
+
+logger = logging.getLogger(__name__)
+
 
 class Project(BaseModel):
     """
@@ -38,6 +42,13 @@ class Project(BaseModel):
     def __str__(self):
         return f"{self.name} ({self.department.name})"
 
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New project record created | ID: {self.id} | Name: {self.name} | Dept ID: {self.department_id} | Type: {self.project_type}")
+
+
     class Meta:
         db_table = "projects"
 
@@ -70,6 +81,12 @@ class ProjectMember(BaseModel):
     
     joined_at = models.DateTimeField(help_text="Date and time when member joined the project")
     left_at = models.DateTimeField(null=True, blank=True, help_text="Date and time when member left the project")
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"Project membership initialized | Member ID: {self.id} | Project ID: {self.project_id} | Employee ID: {self.employee_id} | Position: {self.position}")
 
     def __str__(self):
         return f"{self.employee.user.username} - {self.project.name} ({self.position})"

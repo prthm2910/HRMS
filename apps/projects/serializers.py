@@ -1,8 +1,11 @@
 from rest_framework import serializers
+import logging
 from apps.projects.models import Project, ProjectMember
 from apps.projects.constants import ProjectType, Position
 from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer
+
+logger = logging.getLogger(__name__)
 
 class ProjectMemberSerializer(BaseSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
@@ -28,6 +31,7 @@ class ProjectMemberSerializer(BaseSerializer):
             target_project = attrs.get('project')
             # If creating/updating project assignment
             if target_project and target_project.department != hod_dept:
+                logger.warning(f"Unauthorized assignment attempt: HOD cross-department membership | HOD User ID: {user.id} | Target Project ID: {target_project.id}")
                 raise serializers.ValidationError("You cannot add members to a project in another department.")
         
         return attrs
@@ -104,6 +108,7 @@ class ProjectSerializer(BaseSerializer):
         
         # 3. Regular employees cannot create projects (handled by permissions)
         else:
+            logger.warning(f"Permission rejection: Regular employee attempted project creation | User ID: {user.id}")
             raise serializers.ValidationError({
                 "detail": "Only Administrators and HODs can create projects."
             })
@@ -126,6 +131,7 @@ class ProjectSerializer(BaseSerializer):
                 duplicate_query = duplicate_query.exclude(id=self.instance.id)
             
             if duplicate_query.exists():
+                logger.warning(f"Validation rejection: Duplicate project name in department | Name: {project_name} | Dept ID: {department.id}")
                 raise serializers.ValidationError({
                     "name": f"A project with the name '{project_name}' already exists in the {department.name} department."
                 })
@@ -143,6 +149,7 @@ class ProjectSerializer(BaseSerializer):
                     duplicate_parent_query = duplicate_parent_query.exclude(id=self.instance.id)
                 
                 if duplicate_parent_query.exists():
+                    logger.warning(f"Validation rejection: Duplicate project name under parent | Name: {project_name} | Parent ID: {parent_project.id}")
                     raise serializers.ValidationError({
                         "name": f"A project with the name '{project_name}' already exists under the parent project '{parent_project.name}'."
                     })
@@ -155,6 +162,7 @@ class ProjectSerializer(BaseSerializer):
             # Validate start date
             if start_date and parent_project.started_at:
                 if start_date < parent_project.started_at.date():
+                    logger.warning(f"Validation rejection: Sub-project start date before parent | Sub Project: {project_name} | Parent ID: {parent_project.id}")
                     raise serializers.ValidationError({
                         "started_at": f"Sub-project start date cannot be before parent project start date ({parent_project.started_at.date()})."
                     })
@@ -162,6 +170,7 @@ class ProjectSerializer(BaseSerializer):
             # Validate end date (only if parent has an end date)
             if end_date and parent_project.ended_at:
                 if end_date > parent_project.ended_at.date():
+                    logger.warning(f"Validation rejection: Sub-project end date after parent | Sub Project: {project_name} | Parent ID: {parent_project.id}")
                     raise serializers.ValidationError({
                         "ended_at": f"Sub-project end date cannot be after parent project end date ({parent_project.ended_at.date()})."
                     })
