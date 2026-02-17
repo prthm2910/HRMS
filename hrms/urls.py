@@ -23,6 +23,10 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.permissions import AllowAny
 from django.conf import settings
 from django.conf.urls.static import static
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info("Initializing HRMS core URL routing hierarchy")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
