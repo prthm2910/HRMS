@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 from rest_framework import status
 from rest_framework.response import Response
 from django.db.models import Q
@@ -20,6 +21,8 @@ from apps.leaves.serializers import (
     BulkLeaveRequestSerializer,
     BulkLeaveResponseSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 @extend_schema(tags=['Leave Balance'])
 class LeaveBalanceViewSet(RoleReadOnlyViewSet):
@@ -223,16 +226,19 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
         # But we now get the benefit of AdminWritePermissionMixin for destroy().
         instance = self.get_object()
         user = request.user
+        logger.info(f"Update leave request initiated | Request ID: {instance.id} | User ID: {user.id}")
         user_employee = get_employee_profile(user)
 
         # 1. Admin full access
         if user.is_superuser:
+            logger.info(f"Superuser overriding update | Request ID: {instance.id}")
             return super().update(request, *args, **kwargs)
 
         # 2. Employee editing their own request
         if instance.employee == user_employee:
             # Check if status is PENDING
             if instance.status != LeaveRequestStatus.PENDING.value:
+                logger.warning(f"Employee update rejected | Request {instance.id} already {instance.status} | User ID: {user.id}")
                 return Response(
                     {"detail": f"Cannot edit: Leave request is already {instance.status}. Contact your manager for changes."},
                     status=status.HTTP_403_FORBIDDEN
@@ -240,6 +246,7 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
             
             # Check if started_at is in the future
             if instance.started_at.date() <= date.today():
+                logger.warning(f"Employee update rejected | Request {instance.id} has already started | User ID: {user.id}")
                 return Response(
                     {"detail": "Cannot edit: Leave has already started or is in the past."},
                     status=status.HTTP_403_FORBIDDEN
@@ -247,6 +254,7 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
             
             # Check if trying to change status
             if 'status' in request.data:
+                logger.warning(f"Employee update rejected | Attempted status change | Request ID: {instance.id} | User ID: {user.id}")
                 return Response(
                     {"detail": "Forbidden: You cannot change the status. Only your manager can approve/reject."},
                     status=status.HTTP_403_FORBIDDEN
@@ -260,12 +268,14 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
             allowed_fields = ['status', 'rejection_reason']
             disallowed_fields = [key for key in request.data.keys() if key not in allowed_fields]
             if disallowed_fields:
+                logger.warning(f"Manager update rejected | Disallowed fields {disallowed_fields} | Request ID: {instance.id} | User ID: {user.id}")
                 return Response(
                     {
                         "detail": f"Forbidden: Managers can only modify 'status' or 'rejection_reason'. You sent: {', '.join(disallowed_fields)}"
                     },
                     status=status.HTTP_403_FORBIDDEN
                 )
+            logger.info(f"Manager updating request status | Request ID: {instance.id} | New Status: {request.data.get('status')} | User ID: {user.id}")
             return super().update(request, *args, **kwargs)
 
         return Response(
@@ -352,6 +362,7 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
             validated_data = serializer.validated_data or {}
             new_status = validated_data.get('status')
             if new_status in [LeaveRequestStatus.APPROVED.value, LeaveRequestStatus.REJECTED.value]:
+                logger.info(f"Action performed by manager: {new_status} - Leave ID: {serializer.instance.id}")
                 serializer.save(action_by=user_employee)
             else:
                 serializer.save()
@@ -440,6 +451,8 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
         Bulk leave application endpoint.
         Creates multiple leave requests and returns partial success.
         """
+        user = request.user
+        logger.info(f"Bulk leave application initiated | User ID: {user.id}")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -485,6 +498,8 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
                 'failed': len(failed_requests)
             }
         }
+        
+        logger.info(f"Bulk leave application completed | Successful: {len(successful_requests)} | Failed: {len(failed_requests)} | User ID: {user.id}")
         
         # Use response serializer for consistent output
         response_serializer = BulkLeaveResponseSerializer(data=response_data)

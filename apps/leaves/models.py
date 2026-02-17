@@ -5,6 +5,9 @@ from apps.base.models import BaseModel
 from apps.base.utils import calculate_working_and_non_working_days
 from apps.organization.models import Employee
 from apps.leaves.constants import LeaveType, HalfDayPeriod, LeaveRequestStatus
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class LeaveRequest(BaseModel):
@@ -60,7 +63,14 @@ class LeaveRequest(BaseModel):
         # Use utility function for working days calculation (returns tuple)
         # Convert datetime to date for calculation
         res = calculate_working_and_non_working_days(self.started_at.date(), self.ended_at.date())
-        return float(res['working_days'])
+        working_days = float(res['working_days'])
+        
+        logger.debug(
+            f"Leave duration calculated | Request ID: {self.pk} | "
+            f"Period: {self.started_at.date()} to {self.ended_at.date()} | "
+            f"Working Days: {working_days} | Holidays: {res['holidays_count']}"
+        )
+        return working_days
 
 
     def clean(self):

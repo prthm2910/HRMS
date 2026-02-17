@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import logging
 from django.db.models import Q
 from datetime import date
 from drf_spectacular.utils import extend_schema_field
@@ -8,6 +9,8 @@ from apps.base.utils import calculate_working_and_non_working_days, is_weekend, 
 from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType, HalfDayPeriod
 from apps.organization.models import Employee
 from apps.organization.serializers import EmployeeBasicSerializer
+
+logger = logging.getLogger(__name__)
 
 # Note: EmployeeBasicSerializer is now imported from organization.serializers
 # It already includes nested department field
@@ -105,6 +108,8 @@ class LeaveRequestSerializer(BaseSerializer):
                 raise serializers.ValidationError({
                     "ended_at": "End date cannot be before start date."
                 })
+            
+            logger.debug(f"Validating leave period | Request ID: {self.instance.id if self.instance else 'NEW'} | Period: {start} to {end} | User ID: {user.id if user else 'N/A'}")
             
             # Allow same-day half-day leaves for emergencies
             is_half_day = data.get('is_half_day', False)
@@ -223,12 +228,13 @@ class LeaveRequestSerializer(BaseSerializer):
             if self.instance:
                 overlapping_requests = overlapping_requests.exclude(id=self.instance.id)
 
-            if overlapping_requests.exists():
-                conflict = overlapping_requests.first()
-                if conflict:
-                    raise serializers.ValidationError(
-                        f"You already have a leave request for this period ({conflict.started_at.date()} to {conflict.ended_at.date()})." 
-                    )
+                if overlapping_requests.exists():
+                    conflict = overlapping_requests.first()
+                    if conflict:
+                        logger.warning(f"Overlap detected | Requested: {start} to {end} | Conflict ID: {conflict.id} | User ID: {user.id if user else 'N/A'}")
+                        raise serializers.ValidationError(
+                            f"You already have a leave request for this period ({conflict.started_at.date()} to {conflict.ended_at.date()})." 
+                        )
 
         # 6. Balance Check (Only on CREATE)
         if request and request.method == 'POST' and employee:
@@ -269,10 +275,12 @@ class LeaveRequestSerializer(BaseSerializer):
                     )
                     
                     if balance_record.remaining_leaves < days_requested:
+                        logger.warning(f"Insufficient balance | Requested: {days_requested} | Available: {balance_record.remaining_leaves} | Type: {leave_type} | User ID: {user.id if user else 'N/A'}")
                         raise serializers.ValidationError(
                             f"Insufficient Balance. You have {balance_record.remaining_leaves} {leave_type} leaves left."
                         )
                 except LeaveBalance.DoesNotExist:
+                     logger.error(f"Integrity Error: No LeaveBalance record found for employee {employee.id} type {leave_type}")
                      raise serializers.ValidationError(f"Leave balance record not found for {leave_type}.")
 
         return data
@@ -280,6 +288,7 @@ class LeaveRequestSerializer(BaseSerializer):
     def create(self, validated_data):
         user = self.context['request'].user
         validated_data['employee'] = user.employee_profile
+        logger.info(f"Creating leave request | User ID: {user.id} | Type: {validated_data.get('leave_type')} | Period: {validated_data.get('started_at').date()} to {validated_data.get('ended_at').date()}")
         return super().create(validated_data)
 
 
