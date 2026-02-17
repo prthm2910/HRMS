@@ -5,6 +5,9 @@ from apps.base.models import BaseModel
 from apps.holidays.constants import HolidayExtractionStatus
 import uuid
 from datetime import date
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Holiday(BaseModel):
@@ -111,9 +114,11 @@ class Holiday(BaseModel):
         # Handle recurring holiday logic
         if self.is_recurring and is_new:
             # Generate future holidays (next 5 years)
+            logger.info(f"Generating recurring holiday sequence | Group ID: {self.recurring_group_id} | Name: {self.name}")
             self._generate_future_holidays()
         elif not self.is_recurring and was_recurring:
             # User unchecked is_recurring - delete future holidays and clear group ID
+            logger.info(f"Removing recurring holiday sequence | Group ID: {self.recurring_group_id}")
             self._remove_future_recurring_holidays()
 
     def _generate_future_holidays(self):
@@ -150,6 +155,7 @@ class Holiday(BaseModel):
         
         # Bulk create all future holidays
         if holidays_to_create:
+            logger.debug(f"Bulk creating {len(holidays_to_create)} future holidays for group: {self.recurring_group_id}")
             Holiday.objects.bulk_create(holidays_to_create)
 
     def _remove_future_recurring_holidays(self):
@@ -178,11 +184,13 @@ class Holiday(BaseModel):
         """
         if self.recurring_group_id:
             # Mark all holidays in this recurring group as deleted (soft delete)
+            logger.info(f"Soft deleting recurring holiday group | Group ID: {self.recurring_group_id}")
             Holiday.objects.filter(
                 recurring_group_id=self.recurring_group_id
             ).update(is_deleted=True)
         else:
             # Single holiday - just soft delete
+            logger.info(f"Soft deleting single holiday | Record ID: {self.pk}")
             self.is_deleted = True
             self.save()
 

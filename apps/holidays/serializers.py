@@ -3,6 +3,9 @@ from django.db import models
 from datetime import date as date_type
 from apps.holidays.models import Holiday
 from apps.base.serializers import BaseSerializer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -65,6 +68,7 @@ class HolidaySerializer(BaseSerializer):
                 query = query.exclude(pk=self.instance.pk)
             
             if query.exists():
+                logger.warning(f"Holiday validation rejected | Duplicate found | Date: {date_val} | Region: {region_val}")
                 raise serializers.ValidationError({
                     'holiday_date': f'A holiday already exists on {date_val} for region "{region_val or "All"}"'
                 })
@@ -155,6 +159,8 @@ class BulkHolidayCreateSerializer(serializers.Serializer):
         # Optimization: Use bulk_create for all new holidays in a single query
         if holidays_to_create:
             created_holidays = Holiday.objects.bulk_create(holidays_to_create)
+        
+        logger.info(f"Bulk holiday creation completed | Success: {len(created_holidays)} | Skipped: {len(skipped_holidays)}")
         
         return {
             'created': created_holidays,

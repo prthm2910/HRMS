@@ -2,6 +2,9 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from datetime import date
 from apps.holidays.models import Holiday
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Holiday)
@@ -12,10 +15,12 @@ def recalculate_leaves_on_holiday_create(sender, instance, created, **kwargs):
     """
     # Only recalculate for active holidays
     if not instance.is_active or instance.is_deleted:
+        logger.debug(f"Skipping recalculation for inactive/deleted holiday: {instance.holiday_date}")
         return
     
     # Only recalculate for newly created holidays or when reactivating
     if created or kwargs.get('update_fields') and 'is_active' in kwargs.get('update_fields', []):
+        logger.info(f"Holiday created/reactivated: {instance.holiday_date} (Region: {instance.region or 'All'})")
         _recalculate_affected_leaves(instance.holiday_date.date(), instance.region)
 
 
@@ -25,6 +30,7 @@ def recalculate_leaves_on_holiday_delete(sender, instance, **kwargs):
     When a holiday is deleted, recalculate affected leave requests.
     This may increase leave duration for affected requests.
     """
+    logger.info(f"Holiday deleted: {instance.holiday_date} (Region: {instance.region or 'All'})")
     _recalculate_affected_leaves(instance.holiday_date.date(), instance.region)
 
 
@@ -51,13 +57,7 @@ def _recalculate_affected_leaves(holiday_date, region=None):
         is_deleted=False
     )
     
-    print("\n" + "="*70)
-    print(f"🔄 LEAVE RECALCULATION TRIGGERED")
-    print("="*70)
-    print(f"Holiday Date: {holiday_date}")
-    print(f"Region: {region or 'All'}")
-    print(f"Affected Leaves: {affected_leaves.count()}")
-    print("="*70)
+    logger.info(f"Recalculating leaves for holiday on {holiday_date} (Region: {region or 'All'}). Affected leaves: {affected_leaves.count()}")
     
     for leave in affected_leaves:
         # Calculate old duration
@@ -86,15 +86,12 @@ def _recalculate_affected_leaves(holiday_date, region=None):
                 balance.used_leaves -= duration_diff
                 balance.save()
                 
-                print(f"\n✅ Updated Leave Request ID: {leave.id}")
-                print(f"   Employee: {leave.employee.employee_id}")
-                print(f"   Period: {leave.started_at.date()} to {leave.ended_at.date()}")
-                print(f"   Old Duration: {old_duration} days")
-                print(f"   New Duration: {new_duration} days")
-                print(f"   Credited Back: {duration_diff} days")
-                print(f"   New Balance: {balance.remaining_leaves} {leave.leave_type} leaves")
+                logger.info(
+                    f"Leave recalculated - ID: {leave.id}, Employee: {leave.employee.employee_id}, "
+                    f"Period: {leave.started_at.date()} to {leave.ended_at.date()}, "
+                    f"Old: {old_duration}d, New: {new_duration}d, Credited: {duration_diff}d"
+                )
                 
             except LeaveBalance.DoesNotExist:
-                print(f"\n⚠️  Warning: No balance record found for {leave.employee.employee_id}")
+                logger.warning(f"No balance record found for employee {leave.employee.employee_id} (Leave ID: {leave.id})")
     
-    print("="*70 + "\n")
