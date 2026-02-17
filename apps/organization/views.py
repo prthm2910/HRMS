@@ -1,4 +1,5 @@
 from rest_framework import status
+import logging
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
@@ -12,6 +13,8 @@ from apps.base.views import (
 )
 from apps.organization.models import Employee, Department, HOD
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer, HODSerializer
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=['HODs'])
@@ -96,12 +99,14 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                 # For now, let's require manager_id for admin usage or return empty to avoid massive dump.
                 # Actually user asked for "subordinates of THAT user" (meaning self default).
                 # But admins don't have an employee profile usually.
+                logger.warning(f"Admin team view rejected | Missing manager_id | User ID: {user.id}")
                 return Response({"detail": "Admins must provide ?manager_id=... to view a specific team."}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Regular Employee
             try:
                 myself = user.employee_profile
             except AttributeError:
+                logger.warning(f"Team view rejected | No employee profile | User ID: {user.id}")
                 return Response({"detail": "User has no employee profile."}, status=status.HTTP_403_FORBIDDEN)
             
             if manager_id:
@@ -134,17 +139,19 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                         depth += 1
                     
                     if not is_descendant:
+                         logger.warning(f"Team view unauthorized | Target: {manager_id} is not a descendant | User ID: {user.id}")
                          return Response({"detail": "You can only view teams of your subordinates."}, status=status.HTTP_403_FORBIDDEN)
             else:
                 # Default: View my own direct reports
                 target_manager = myself
+            
+            logger.info(f"Team drill-down accessed | Target Manager ID: {target_manager.id} | User ID: {user.id}")
 
         # 2. Fetch Direct Reports & Annotate with THEIR reports count
-        # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
         direct_reports = Employee.objects.filter(
             manager=target_manager, 
             is_deleted=False
-        ).select_related('user', 'department').annotate(
+        ).annotate(
             direct_reports_count=Count('subordinates', filter=Q(subordinates__is_deleted=False))
         ).order_by('user__first_name')
 

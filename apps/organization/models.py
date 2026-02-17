@@ -4,6 +4,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from apps.base.models import BaseModel
 from apps.organization.constants import EmploymentType
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Department(BaseModel):
@@ -88,17 +91,24 @@ class Employee(BaseModel):
                     self.employee_id = new_id
                     break
         
+        is_new = self._state.adding
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New employee profile saved | Employee ID: {self.employee_id} | User ID: {self.user.id}")
+        else:
+            logger.debug(f"Employee profile updated | Employee ID: {self.employee_id}")
 
     def clean(self):
     # 1. Prevent reporting to yourself
         if self.manager == self:
+            logger.warning(f"Hierarchy validation failed | Self-reporting attempt | Employee ID: {self.employee_id}")
             raise ValidationError("You cannot report to yourself.")
         
         # 2. Prevent simple cycles (A -> B -> A)
         # Note: For deep cycles (A->B->C->A), you need more complex logic, 
         # but strictly checking immediate parent is the bare minimum.
         if self.manager and self.manager.manager == self:
+            logger.warning(f"Hierarchy validation failed | Circular reporting detected | Employee: {self.employee_id} -> Manager: {self.manager.employee_id}")
             raise ValidationError("Circular reporting detected.")    
 
 class HOD(BaseModel):

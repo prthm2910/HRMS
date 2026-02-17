@@ -1,9 +1,12 @@
 from rest_framework import serializers
+import logging
 from django.contrib.auth import get_user_model
 from apps.base.serializers import BaseSerializer
 from apps.organization.models import Employee, Department, HOD
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 class DepartmentSerializer(BaseSerializer):
     class Meta:
@@ -111,9 +114,11 @@ class EmployeeSerializer(BaseSerializer):
             last_name=u_lname, 
             phone_number=u_phone
         )
+        logger.info(f"Identity record created for new employee | User ID: {user.id}")
 
         # Create Employee (employee_id generated in models.py save method)
         employee = Employee.objects.create(user=user, **validated_data)
+        logger.info(f"Employee profile established | Employee ID: {employee.employee_id} | User ID: {user.id}")
         return employee
 
     def update(self, instance, validated_data):
@@ -143,7 +148,9 @@ class EmployeeSerializer(BaseSerializer):
                 pwd = validated_data.pop('user_password')
                 if pwd: user.set_password(pwd)
             user.save()
+            logger.debug(f"User identity updated for employee | Employee ID: {instance.employee_id}")
 
+        logger.info(f"Employee profile update initiated | Employee ID: {instance.employee_id} | Fields: {list(validated_data.keys())}")
         return super().update(instance, validated_data)
 
 class HODSerializer(BaseSerializer):
