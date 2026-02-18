@@ -122,7 +122,7 @@ class LeaveRequestSerializer(BaseSerializer):
                     })
             else:
                 # Half-day leaves can be on the same day, but not in the past
-                if start < date.today():
+                if start.date() < date.today():
                     raise serializers.ValidationError({
                         "started_at": "Half-day leave cannot be applied for past dates."
                     })
