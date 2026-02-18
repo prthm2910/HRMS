@@ -3,7 +3,6 @@ Constants for the audit app.
 Contains all enums used in audit and AI operation models.
 """
 
-from enum import Enum
 from apps.base.constants import BaseEnum
 
 
@@ -14,7 +13,6 @@ class AuditAction(BaseEnum):
     DELETE = 'DELETE'
     HARD_DELETE = 'HARD_DELETE'
     AI_SERVICE = 'AI_SERVICE'
-    CHAT = 'CHAT'
 
     _labels = {
         AI_SERVICE: "AI Service Call",
@@ -24,10 +22,6 @@ class AuditAction(BaseEnum):
 class AIOperationType(BaseEnum):
     """AI operation type choices"""
     OCR = 'OCR'
-    NLP = 'NLP'
-    VISION = 'VISION'
-    CLASSIFICATION = 'CLASSIFICATION'
-    GENERATION = 'GENERATION'
 
 
 class AIOperationLogStatus(BaseEnum):
