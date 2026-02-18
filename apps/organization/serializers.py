@@ -92,7 +92,6 @@ class EmployeeSerializer(BaseSerializer):
             # Job Details
             'employee_id', 'designation', 'employment_type', 'salary',
             'joined_at', 'born_at',
-            'manager', 'manager_name', 'department', 'department_name'
         ]
         # CRITICAL: employee_id is now strictly read-only
         read_only_fields = ['employee_id', 'direct_reports_count']
