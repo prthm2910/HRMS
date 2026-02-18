@@ -3,6 +3,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from apps.base.models import BaseModel
+import logging
 
 logger = logging.getLogger(__name__)
 
