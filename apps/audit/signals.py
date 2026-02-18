@@ -3,6 +3,9 @@ from django.dispatch import receiver
 from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from apps.audit.models import AuditLog
 from apps.base.utils import get_audit_data

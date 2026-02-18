@@ -3,6 +3,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 # IF YOU USE STANDARD TOKENS: from rest_framework.authentication import TokenAuthentication
 
 from apps.base.utils import set_audit_data, clear_audit_data
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AuditMiddleware:
     def __init__(self, get_response):
