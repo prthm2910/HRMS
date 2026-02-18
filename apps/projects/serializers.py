@@ -169,7 +169,7 @@ class ProjectSerializer(BaseSerializer):
             
             # Validate end date (only if parent has an end date)
             if end_date and parent_project.ended_at:
-                if end_date > parent_project.ended_at.date():
+                if end_date.date() > parent_project.ended_at.date():
                     logger.warning(f"Validation rejection: Sub-project end date after parent | Sub Project: {project_name} | Parent ID: {parent_project.id}")
                     raise serializers.ValidationError({
                         "ended_at": f"Sub-project end date cannot be after parent project end date ({parent_project.ended_at.date()})."
