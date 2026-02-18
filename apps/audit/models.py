@@ -92,7 +92,7 @@ class AIOperationLog(models.Model):
     # AI operation details
     operation_type = models.CharField(
         max_length=50,
-        choices=AIOperationType.choices(),
+        choices=AIOperationType.choices(),                          
         help_text="Type of AI operation performed"
     )
     
