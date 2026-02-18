@@ -116,7 +116,7 @@ class LeaveRequestSerializer(BaseSerializer):
             
             if not is_half_day:
                 # Full-day leaves must be in the future
-                if start < date.today():
+                if start.date() < date.today():
                     raise serializers.ValidationError({
                         "started_at": "Full-day leave requests must be for future dates. For same-day emergencies, please use half-day leave."
                     })
