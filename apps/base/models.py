@@ -47,6 +47,30 @@ class BaseModel(models.Model):
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        """
+        Overridden save method to handle:
+        1. Automated Human-Readable ID (HRID) generation.
+        """
+        # Look for HRID configuration attributes in child classes
+        prefix = getattr(self, '_display_id_prefix', None)
+        field_name = getattr(self, '_display_id_field', None)
+        
+        if prefix and field_name:
+            # Only generate if the field is currently empty
+            if not getattr(self, field_name, None):
+                from apps.base.utils import generate_unique_id
+                
+                new_id = generate_unique_id(
+                    model_class=self.__class__, 
+                    field_name=field_name, 
+                    prefix=prefix, 
+                    length=6
+                )
+                setattr(self, field_name, new_id)
+        
+        super().save(*args, **kwargs)
+
     class Meta:
         abstract = True # CRITICAL: This tells Django "Don't make a table for this class".
                         # Only make tables for models that INHERIT from this.
