@@ -1,4 +1,3 @@
-import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -12,6 +11,18 @@ logger = logging.getLogger(__name__)
 class Department(BaseModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
+
+    # Human-Readable ID
+    department_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: DEPXXXXXX"
+    )
+
+    _display_id_prefix = 'DEP'
+    _display_id_field = 'department_id'
 
     def __str__(self):
         return self.name
@@ -59,6 +70,9 @@ class Employee(BaseModel):
     born_at = models.DateTimeField(null=True, blank=True, help_text="Date and time of birth")
     salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
 
+    _display_id_prefix = 'EMP'
+    _display_id_field = 'employee_id'
+
     manager = models.ForeignKey(
         'self', 
         on_delete=models.SET_NULL, 
@@ -76,21 +90,6 @@ class Employee(BaseModel):
         db_table = 'employees'
 
     def save(self, *args, **kwargs):
-        # Auto-generate ID if it doesn't exist
-        if not self.employee_id:
-            while True:
-                # Generates a random hex string (e.g., 'a1b2c3')
-                # .hex[:6] takes the first 6 characters.
-                random_suffix = uuid.uuid4().hex[:6].upper()
-                
-                # Format: EMP + RandomString (No hyphen) -> EMPA1B2C3
-                new_id = f"EMP{random_suffix}"
-                
-                # Check if this ID already exists to prevent duplicates
-                if not Employee.objects.filter(employee_id=new_id).exists():
-                    self.employee_id = new_id
-                    break
-        
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new:
@@ -142,6 +141,17 @@ class HOD(BaseModel):
         on_delete=models.CASCADE,
         related_name='hod_profile'
     )
+
+    hod_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: HODXXXXXX"
+    )
+
+    _display_id_prefix = 'HOD'
+    _display_id_field = 'hod_id'
 
     def __str__(self):
         return f"HOD: {self.employee.user.username} - {self.department.name}"

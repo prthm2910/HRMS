@@ -18,6 +18,17 @@ class User(AbstractUser, BaseModel):
     - BaseModel: Gives us UUID, created_at, is_deleted (Our custom rules).
     """
 
+    user_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: USRXXXXXX"
+    )
+
+    _display_id_prefix = 'USR'
+    _display_id_field = 'user_id'
+
     # Customization:
     # Django's default 'email' field is optional. We override it to be Unique & Required.
     email = models.EmailField(unique=True)

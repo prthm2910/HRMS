@@ -1,5 +1,4 @@
 import logging
-import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -22,12 +21,16 @@ class SalaryComponent(BaseModel):
         help_text="Auto-generated from name (e.g., basic-salary, hra, pf-deduction)"
     )
     
-    # UUID fallback identifier
-    salary_component_id = models.UUIDField(
-        default=uuid.uuid4,
+    # HRID identifier
+    salary_component_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True
+        null=True,
+        help_text="Format: SCMXXXXXX"
     )
+    _display_id_prefix = 'SCM'
+    _display_id_field = 'salary_component_id'
     name = models.CharField(max_length=100, unique=True)
     component_type = models.CharField(
         max_length=20,
@@ -76,12 +79,16 @@ class EmployeeSalaryStructure(BaseModel):
     """Employee-specific salary breakdown"""
     
     # Business identifier (exposed in APIs)
-    employee_salary_structure_id = models.UUIDField(
-        default=uuid.uuid4,
+    employee_salary_structure_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True,
-        db_index=True
+        null=True,
+        db_index=True,
+        help_text="Format: ESSXXXXXX"
     )
+    _display_id_prefix = 'ESS'
+    _display_id_field = 'employee_salary_structure_id'
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
@@ -127,12 +134,16 @@ class TaxRule(BaseModel):
         help_text="Auto-generated from name (e.g., india-tax-slab-1-0-3l)"
     )
     
-    # UUID fallback identifier
-    tax_rule_id = models.UUIDField(
-        default=uuid.uuid4,
+    # HRID identifier
+    tax_rule_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True
+        null=True,
+        help_text="Format: TAXXXXXXX"
     )
+    _display_id_prefix = 'TAX'
+    _display_id_field = 'tax_rule_id'
     name = models.CharField(max_length=100)
     country = models.CharField(max_length=2, default='IN')  # ISO country code
     min_income = models.DecimalField(
@@ -192,12 +203,16 @@ class PayrollRun(BaseModel):
         help_text="Auto-generated from month/year (e.g., pr-february-2026)"
     )
     
-    # UUID fallback identifier
-    payroll_run_id = models.UUIDField(
-        default=uuid.uuid4,
+    # HRID identifier
+    payroll_run_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True
+        null=True,
+        help_text="Format: PRNXXXXXX"
     )
+    _display_id_prefix = 'PRN'
+    _display_id_field = 'payroll_run_id'
     month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)]
     )
@@ -267,12 +282,16 @@ class Payslip(BaseModel):
     """Individual employee payslip"""
     
     # Business identifier (exposed in APIs)
-    payslip_id = models.UUIDField(
-        default=uuid.uuid4,
+    payslip_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True,
-        db_index=True
+        null=True,
+        db_index=True,
+        help_text="Format: PAYXXXXXX"
     )
+    _display_id_prefix = 'PAY'
+    _display_id_field = 'payslip_id'
     payroll_run = models.ForeignKey(
         PayrollRun,
         on_delete=models.CASCADE,
@@ -338,12 +357,16 @@ class PayslipComponent(BaseModel):
     # ComponentType is imported from apps.payroll.constants
     
     # Business identifier (exposed in APIs)
-    payslip_component_id = models.UUIDField(
-        default=uuid.uuid4,
+    payslip_component_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True,
-        db_index=True
+        null=True,
+        db_index=True,
+        help_text="Format: PSCXXXXXX"
     )
+    _display_id_prefix = 'PSC'
+    _display_id_field = 'payslip_component_id'
     payslip = models.ForeignKey(
         Payslip,
         on_delete=models.CASCADE,
@@ -368,12 +391,16 @@ class PayrollAutomationConfig(BaseModel):
     """Settings for automated payroll"""
     
     # Business identifier (exposed in APIs)
-    payroll_automation_config_id = models.UUIDField(
-        default=uuid.uuid4,
+    payroll_automation_config_id = models.CharField(
+        max_length=20, 
+        unique=True, 
         editable=False,
-        unique=True,
-        db_index=True
+        null=True,
+        db_index=True,
+        help_text="Format: PACXXXXXX"
     )
+    _display_id_prefix = 'PAC'
+    _display_id_field = 'payroll_automation_config_id'
     is_enabled = models.BooleanField(default=False)
     run_day = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(31)],
