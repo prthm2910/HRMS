@@ -104,12 +104,28 @@ class Employee(BaseModel):
             logger.warning(f"Hierarchy validation failed | Self-reporting attempt | Employee ID: {self.employee_id}")
             raise ValidationError("You cannot report to yourself.")
         
-        # 2. Prevent simple cycles (A -> B -> A)
-        # Note: For deep cycles (A->B->C->A), you need more complex logic, 
-        # but strictly checking immediate parent is the bare minimum.
-        if self.manager and self.manager.manager == self:
-            logger.warning(f"Hierarchy validation failed | Circular reporting detected | Employee: {self.employee_id} -> Manager: {self.manager.employee_id}")
-            raise ValidationError("Circular reporting detected.")    
+        # 2. Prevent circular reporting (A -> B -> C -> A)
+        # Using a hashset for O(N) cycle detection, with a safety depth limit.
+        visited_managers = {self.id} if self.id else set()
+        current_manager = self.manager
+        depth = 0
+        MAX_DEPTH = 500
+
+        while current_manager:
+            if current_manager.id in visited_managers:
+                logger.warning(
+                    f"Hierarchy validation failed | Circular reporting detected | "
+                    f"Employee: {self.employee_id} -> Manager: {current_manager.employee_id}"
+                )
+                raise ValidationError("Circular reporting detected.")
+            
+            visited_managers.add(current_manager.id)
+            current_manager = current_manager.manager
+            depth += 1
+            
+            if depth > MAX_DEPTH:
+                logger.error(f"Hierarchy validation failed | Maximum reporting depth exceeded | Employee: {self.employee_id}")
+                raise ValidationError("Maximum reporting depth exceeded. Potential infinite loop or invalid hierarchy.")
 
 class HOD(BaseModel):
     """
