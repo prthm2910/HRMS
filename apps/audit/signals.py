@@ -3,6 +3,9 @@ from django.dispatch import receiver
 from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from apps.audit.models import AuditLog
 from apps.base.utils import get_audit_data
@@ -40,6 +43,17 @@ def sanitize_changes(changes):
 
 @receiver(pre_save)
 def capture_old_state(sender, instance, **kwargs):
+    """
+    Captures the old state of the instance before it is saved or updated.
+    
+    If the instance exists in the database, it retrieves the old instance and
+    stores its state in the instance's `_old_state` attribute. If the instance
+    does not exist in the database (i.e., it is being created), it sets the
+    `_old_state` attribute to None.
+    
+    This function is called before the instance is saved or updated, and is used
+    to track changes to the instance.
+    """
     if sender.__name__ not in TRACKED_MODELS:
         return
     
@@ -47,6 +61,7 @@ def capture_old_state(sender, instance, **kwargs):
         try:
             old_instance = sender.objects.get(pk=instance.pk)
             instance._old_state = model_to_dict(old_instance)
+            logger.debug(f"Captured old state for {sender.__name__} record ID: {instance.pk}")
         except sender.DoesNotExist:
             instance._old_state = None
     else:
@@ -54,6 +69,25 @@ def capture_old_state(sender, instance, **kwargs):
 
 @receiver(post_save)
 def log_create_or_update(sender, instance, created, **kwargs):
+    """
+    Logs the creation or update of a model instance.
+
+    If the instance is being created, it logs a 'CREATE' action with the new
+    state of the instance. If the instance is being updated, it logs an
+    'UPDATE' action with the changes made to the instance.
+
+    If the instance is being soft deleted (i.e., its `is_deleted` field is set
+    to True), it logs a 'DELETE' action.
+
+    The function sanitizes the changes before saving them to the audit log,
+    hiding sensitive fields such as passwords.
+
+    Args:
+        sender: The model class
+        instance: The model instance being created or updated
+        created: A boolean indicating whether the instance is being created
+            or updated
+    """
     if sender.__name__ not in TRACKED_MODELS:
         return
 
@@ -98,9 +132,23 @@ def log_create_or_update(sender, instance, created, **kwargs):
             user_agent=user_agent,
             path=path
         )
+        logger.info(f"Audit log entry created | Action: {action} | Table: {sender.__name__} | Record ID: {instance.pk}")
 
 @receiver(post_delete)
 def log_hard_delete(sender, instance, **kwargs):
+    """
+    Logs the hard deletion of a model instance.
+
+    This function is called after the instance is deleted from the database.
+
+    It logs a 'HARD_DELETE' action with the old state of the instance, and
+    sanitizes the changes before saving them to the audit log, hiding
+    sensitive fields such as passwords.
+
+    Args:
+        sender: The model class
+        instance: The model instance being deleted
+    """
     if sender.__name__ not in TRACKED_MODELS:
         return
 
@@ -121,3 +169,4 @@ def log_hard_delete(sender, instance, **kwargs):
         user_agent=data.get('user_agent'),
         path=data.get('path')
     )
+    logger.info(f"Audit log entry created | Action: HARD_DELETE | Table: {sender.__name__} | Record ID: {instance.pk}")

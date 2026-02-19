@@ -2,10 +2,14 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
+from apps.organization.constants import EmploymentType
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class Department(BaseTemplateModel):
+class Department(BaseModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
 
@@ -18,15 +22,7 @@ class Department(BaseTemplateModel):
         db_table = 'departments'
 
 
-class EmploymentType(models.TextChoices):
-    """Employment type choices for Employee model"""
-    FULL_TIME = 'FULL_TIME', 'Full Time'
-    PART_TIME = 'PART_TIME', 'Part Time'
-    CONTRACT = 'CONTRACT', 'Contract'
-    INTERN = 'INTERN', 'Intern'
-
-
-class Employee(BaseTemplateModel):
+class Employee(BaseModel):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -53,12 +49,14 @@ class Employee(BaseTemplateModel):
     designation = models.CharField(max_length=100)
     employment_type = models.CharField(
         max_length=20, 
-        choices=EmploymentType.choices, 
-        default=EmploymentType.FULL_TIME
+        choices=EmploymentType.choices(), 
+        default=EmploymentType.FULL_TIME.value
     )
-    date_of_joining = models.DateField()
-
-    date_of_birth = models.DateField(null=True, blank=True)
+    # Employment details
+    joined_at = models.DateTimeField(help_text="Date and time when employee joined the organization")
+    
+    # Personal details
+    born_at = models.DateTimeField(null=True, blank=True, help_text="Date and time of birth")
     salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
 
     manager = models.ForeignKey(
@@ -93,20 +91,27 @@ class Employee(BaseTemplateModel):
                     self.employee_id = new_id
                     break
         
+        is_new = self._state.adding
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New employee profile saved | Employee ID: {self.employee_id} | User ID: {self.user.id}")
+        else:
+            logger.debug(f"Employee profile updated | Employee ID: {self.employee_id}")
 
     def clean(self):
     # 1. Prevent reporting to yourself
         if self.manager == self:
+            logger.warning(f"Hierarchy validation failed | Self-reporting attempt | Employee ID: {self.employee_id}")
             raise ValidationError("You cannot report to yourself.")
         
         # 2. Prevent simple cycles (A -> B -> A)
         # Note: For deep cycles (A->B->C->A), you need more complex logic, 
         # but strictly checking immediate parent is the bare minimum.
         if self.manager and self.manager.manager == self:
+            logger.warning(f"Hierarchy validation failed | Circular reporting detected | Employee: {self.employee_id} -> Manager: {self.manager.employee_id}")
             raise ValidationError("Circular reporting detected.")    
 
-class HOD(BaseTemplateModel):
+class HOD(BaseModel):
     """
     Head of Department.
     Links an Employee to a Department they manage.

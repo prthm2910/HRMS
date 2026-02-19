@@ -1,16 +1,19 @@
 from rest_framework import serializers
+import logging
 from django.contrib.auth import get_user_model
-from apps.base.serializers import BaseTemplateSerializer
+from apps.base.serializers import BaseSerializer
 from apps.organization.models import Employee, Department, HOD
 
 User = get_user_model()
 
-class DepartmentSerializer(BaseTemplateSerializer):
+logger = logging.getLogger(__name__)
+
+class DepartmentSerializer(BaseSerializer):
     class Meta:
         model = Department
-        fields = BaseTemplateSerializer.Meta.fields + ['name', 'description']
+        fields = BaseSerializer.Meta.fields + ['name', 'description']
 
-class DepartmentBasicSerializer(BaseTemplateSerializer):
+class DepartmentBasicSerializer(BaseSerializer):
     """
     Lightweight serializer for displaying department info in nested contexts.
     Used by: EmployeeSerializer, EmployeeBasicSerializer
@@ -20,7 +23,7 @@ class DepartmentBasicSerializer(BaseTemplateSerializer):
         fields = ['id', 'name', 'description']
         read_only_fields = fields  # All fields are read-only for nested display
 
-class EmployeeBasicSerializer(BaseTemplateSerializer):
+class EmployeeBasicSerializer(BaseSerializer):
     """
     Lightweight serializer for displaying basic employee info in nested contexts.
     Used by: LeaveRequestSerializer, LeaveBalanceSerializer, EmployeeSerializer (for manager)
@@ -35,7 +38,7 @@ class EmployeeBasicSerializer(BaseTemplateSerializer):
         read_only_fields = fields  # All fields are read-only for nested display
 
 
-class EmployeeSerializer(BaseTemplateSerializer):
+class EmployeeSerializer(BaseSerializer):
     # --- READ ONLY (Output) ---
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
@@ -72,7 +75,7 @@ class EmployeeSerializer(BaseTemplateSerializer):
 
     class Meta:
         model = Employee
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'employee_id',
             
             # User Write Fields
@@ -87,8 +90,8 @@ class EmployeeSerializer(BaseTemplateSerializer):
             'direct_reports_count',
             
             # Job Details
-            'designation', 'employment_type', 'salary',
-            'date_of_joining', 'date_of_birth',
+            'employee_id', 'designation', 'employment_type', 'salary',
+            'joined_at', 'born_at',
         ]
         # CRITICAL: employee_id is now strictly read-only
         read_only_fields = ['employee_id', 'direct_reports_count']
@@ -110,9 +113,11 @@ class EmployeeSerializer(BaseTemplateSerializer):
             last_name=u_lname, 
             phone_number=u_phone
         )
+        logger.info(f"Identity record created for new employee | User ID: {user.id}")
 
         # Create Employee (employee_id generated in models.py save method)
         employee = Employee.objects.create(user=user, **validated_data)
+        logger.info(f"Employee profile established | Employee ID: {employee.employee_id} | User ID: {user.id}")
         return employee
 
     def update(self, instance, validated_data):
@@ -142,15 +147,17 @@ class EmployeeSerializer(BaseTemplateSerializer):
                 pwd = validated_data.pop('user_password')
                 if pwd: user.set_password(pwd)
             user.save()
+            logger.debug(f"User identity updated for employee | Employee ID: {instance.employee_id}")
 
+        logger.info(f"Employee profile update initiated | Employee ID: {instance.employee_id} | Fields: {list(validated_data.keys())}")
         return super().update(instance, validated_data)
 
-class HODSerializer(BaseTemplateSerializer):
+class HODSerializer(BaseSerializer):
     employee_details = EmployeeSerializer(source='employee', read_only=True)
     department_details = DepartmentSerializer(source='department', read_only=True)
 
     class Meta:
         model = HOD
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'employee', 'department', 'employee_details', 'department_details'
         ]

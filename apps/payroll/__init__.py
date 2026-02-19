@@ -1,4 +1,4 @@
 import logging
 
 logger = logging.getLogger(__name__)
-logger.debug("HRMS core module initialized")
+logger.debug("Payroll module initialized")

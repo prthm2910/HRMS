@@ -1,15 +1,19 @@
+import logging
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.base.serializers import BaseTemplateSerializer
+from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeBasicSerializer
 
 # Get the custom User model defined in models.py
 User = get_user_model()
 
+logger = logging.getLogger(__name__)
+
+
 # ------------------------------------------------------------------
 # 0. User Basic Serializer (For Nested Display)
 # ------------------------------------------------------------------
-class UserBasicSerializer(BaseTemplateSerializer):
+class UserBasicSerializer(BaseSerializer):
     """
     Lightweight serializer for displaying basic user info in nested contexts.
     Used by: AuditLogSerializer, EmployeeSerializer
@@ -23,14 +27,14 @@ class UserBasicSerializer(BaseTemplateSerializer):
 # ------------------------------------------------------------------
 # 1. User Serializer (For Profiles)
 # ------------------------------------------------------------------
-class UserSerializer(BaseTemplateSerializer):
+class UserSerializer(BaseSerializer):
     employee_profile = EmployeeBasicSerializer(read_only=True)
     
     class Meta:
         model = User
         # We explicitly list fields to expose in the API.
         # SECURITY: Never include 'password' here!
-        fields = BaseTemplateSerializer.Meta.fields + ['username', 'email', 'phone_number', 'bio', 'employee_profile']
+        fields = BaseSerializer.Meta.fields + ['username', 'email', 'phone_number', 'bio', 'employee_profile']
 
 
 # ------------------------------------------------------------------
@@ -53,6 +57,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         """
         Overriding the create method is CRITICAL for security.
         """
+        logger.debug(f"Initiating secure user creation process | Username: {validated_data.get('username')}")
         # 1. Pop the password from the data (we don't want to save it raw!)
         password = validated_data.pop('password')
         
@@ -60,9 +65,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User(**validated_data)
         
         # 3. Hash the password securely
+        logger.debug(f"Executing password hashing for new user | Username: {user.username}")
         user.set_password(password)
         
         # 4. Save to DB
         user.save()
+        logger.info(f"User registration record saved successfully | User ID: {user.id} | Email Status: Provided")
         
         return user

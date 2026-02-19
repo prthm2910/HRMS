@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,13 +6,14 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
 from apps.base.views import DeleteMixin, AdminWriteViewSet
-from apps.holidays.models import Holiday
+from apps.holidays.models import Holiday, HolidayExtractionStatus
 from apps.holidays.serializers import (
     HolidaySerializer,
     HolidayListSerializer,
     BulkHolidayCreateSerializer
 )
 
+logger = logging.getLogger(__name__)
 
 class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
     """
@@ -49,14 +51,15 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
         end_date = self.request.query_params.get('end_date')
         region = self.request.query_params.get('region')
         
+        # Filter by date range
         if start_date:
-            queryset = queryset.filter(date__gte=start_date)
+            queryset = queryset.filter(holiday_date__gte=start_date)
         if end_date:
-            queryset = queryset.filter(date__lte=end_date)
+            queryset = queryset.filter(holiday_date__lte=end_date)
         if region:
             queryset = queryset.filter(region=region)
         
-        return queryset.order_by('date')
+        return queryset.order_by('holiday_date')
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""
@@ -111,6 +114,7 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
         Saves the image to MEDIA storage for audit trail.
         """
         if 'image' not in request.FILES:
+            logger.warning(f"OCR attempted without image | User ID: {request.user.id}")
             return Response(
                 {'error': 'No image file provided. Please upload an image.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -126,8 +130,9 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
         upload_record = HolidayUpload.objects.create(
             uploaded_by=request.user,
             image=image_file,
-            extraction_status='PENDING'
+            extraction_status=HolidayExtractionStatus.PENDING.value
         )
+        logger.info(f"Initiated holiday OCR process | Upload ID: {upload_record.id} | User ID: {request.user.id}")
         
         try:
             # Use AI service for OCR processing
@@ -161,12 +166,13 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
                 )
             
             # Check if extraction was successful
-            if result['status'] == 'SUCCESS':
+            if result['status'] == HolidayExtractionStatus.SUCCESS.value:
                 # Save extracted data to upload record
                 upload_record.extracted_data = result['extracted_holidays']
-                upload_record.extraction_status = 'SUCCESS'
+                upload_record.extraction_status = HolidayExtractionStatus.SUCCESS.value
                 upload_record.save()
                 
+                logger.info(f"Holiday OCR extraction successful | Upload ID: {upload_record.id} | Count: {result['total_count']}")
                 return Response({
                     'success': True,
                     'upload_id': str(upload_record.id),
@@ -180,10 +186,11 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
                 }, status=status.HTTP_200_OK)
             else:
                 # Extraction failed
-                upload_record.extraction_status = 'FAILED'
+                upload_record.extraction_status = HolidayExtractionStatus.FAILED.value
                 upload_record.error_message = result.get('error', 'Unknown error')
                 upload_record.save()
                 
+                logger.error(f"Holiday OCR extraction failed | Upload ID: {upload_record.id} | Error: {upload_record.error_message}")
                 return Response({
                     'error': 'Failed to process image',
                     'details': result.get('error'),
@@ -191,7 +198,7 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         except Exception as e:
-            upload_record.extraction_status = 'FAILED'
+            upload_record.extraction_status = HolidayExtractionStatus.FAILED.value
             upload_record.error_message = str(e)
             upload_record.save()
             
@@ -211,7 +218,7 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
         {
           "holidays": [
             {
-              "date": "2026-01-26",
+              "holiday_date": "2026-01-26",
               "name": "Republic Day",
               "description": "",
               "is_recurring": true,
@@ -231,6 +238,7 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
           "skipped_holidays": [...]
         }
         """
+        logger.info(f"Executing bulk holiday creation | User ID: {request.user.id}")
         serializer = BulkHolidayCreateSerializer(data=request.data)
         
         if serializer.is_valid():

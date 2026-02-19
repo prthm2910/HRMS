@@ -8,7 +8,7 @@ class HolidayAdmin(admin.ModelAdmin):
     Admin interface for managing holidays.
     """
     list_display = [
-        'date', 
+        'holiday_date', 
         'name', 
         'region', 
         'is_recurring', 
@@ -22,7 +22,7 @@ class HolidayAdmin(admin.ModelAdmin):
         'is_active',
         'is_deleted',
         'region',
-        'date'
+        'holiday_date'
     ]
     
     search_fields = [
@@ -40,7 +40,7 @@ class HolidayAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Holiday Information', {
-            'fields': ('date', 'name', 'description', 'region')
+            'fields': ('holiday_date', 'name', 'description', 'region')
         }),
         ('Recurring Settings', {
             'fields': ('is_recurring', 'recurring_group_id')
@@ -54,8 +54,8 @@ class HolidayAdmin(admin.ModelAdmin):
         }),
     )
     
-    ordering = ['-date']
-    date_hierarchy = 'date'
+    ordering = ['-holiday_date']
+    date_hierarchy = 'holiday_date'
     
     def get_queryset(self, request):
         """Show all holidays including soft-deleted ones in admin"""

@@ -15,6 +15,7 @@ media/
 
 # IDE/Logs
 .vscode/
+logs/
 
 # Redundant files
 test.py

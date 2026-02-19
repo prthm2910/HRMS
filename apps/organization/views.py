@@ -1,7 +1,9 @@
 from rest_framework import status
+import logging
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from apps.base.views import (
     AdminWriteViewSet, 
@@ -11,6 +13,8 @@ from apps.base.views import (
 )
 from apps.organization.models import Employee, Department, HOD
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer, HODSerializer
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=['HODs'])
@@ -88,22 +92,21 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
         if user.is_superuser:
             # Admin can view anyone's team
             if manager_id:
-                try:
-                    target_manager = Employee.objects.get(id=manager_id)
-                except Employee.DoesNotExist:
-                     return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
             else:
                 # If admin calls without ID, what to show? 
                 # Maybe show root level managers (those with no manager)? 
                 # For now, let's require manager_id for admin usage or return empty to avoid massive dump.
                 # Actually user asked for "subordinates of THAT user" (meaning self default).
                 # But admins don't have an employee profile usually.
+                logger.warning(f"Admin team view rejected | Missing manager_id | User ID: {user.id}")
                 return Response({"detail": "Admins must provide ?manager_id=... to view a specific team."}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Regular Employee
             try:
                 myself = user.employee_profile
             except AttributeError:
+                logger.warning(f"Team view rejected | No employee profile | User ID: {user.id}")
                 return Response({"detail": "User has no employee profile."}, status=status.HTTP_403_FORBIDDEN)
             
             if manager_id:
@@ -112,10 +115,7 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                 # We can check this recursively or simply check if they are in my downline.
                 # Simplified check for MVP: Allow valid drill-down.
                 
-                # Check if target manager exists
-                target_manager = Employee.objects.filter(id=manager_id).first()
-                if not target_manager:
-                    return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
 
                 # SECURITY: Verify target_manager is in my downline.
                 # Only allow viewing team of someone who is your direct or indirect report.
@@ -139,10 +139,13 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
                         depth += 1
                     
                     if not is_descendant:
+                         logger.warning(f"Team view unauthorized | Target: {manager_id} is not a descendant | User ID: {user.id}")
                          return Response({"detail": "You can only view teams of your subordinates."}, status=status.HTTP_403_FORBIDDEN)
             else:
                 # Default: View my own direct reports
                 target_manager = myself
+            
+            logger.info(f"Team drill-down accessed | Target Manager ID: {target_manager.id} | User ID: {user.id}")
 
         # 2. Fetch Direct Reports & Annotate with THEIR reports count
         direct_reports = Employee.objects.filter(

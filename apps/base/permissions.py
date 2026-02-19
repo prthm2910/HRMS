@@ -1,4 +1,7 @@
+import logging
 from rest_framework import permissions
+
+logger = logging.getLogger(__name__)
 
 class IsAdminWriteOnly(permissions.BasePermission):
     """
@@ -18,6 +21,10 @@ class IsAdminWriteOnly(permissions.BasePermission):
         # Write operations require superuser status
         is_superuser = request.user.is_superuser
         if not is_superuser:
+            logger.warning(
+                f"Permission Denied (Superuser Required) | User ID: {request.user.id} | "
+                f"Action: {request.method} | View: {view.__class__.__name__}"
+            )
             # Set custom message if provided by the view
             self.message = getattr(view, 'admin_forbidden_message', "Forbidden: Only Administrators have permission to perform this action.")
             
@@ -39,6 +46,10 @@ class IsAdminUserOrReadOnly(permissions.BasePermission):
             
         is_admin = request.user.is_staff or request.user.is_superuser
         if not is_admin:
+            logger.warning(
+                f"Permission Denied (Admin Required) | User ID: {request.user.id} | "
+                f"Action: {request.method} | View: {view.__class__.__name__}"
+            )
             # Set custom message if provided by the view
             self.message = getattr(view, 'admin_forbidden_message', "Forbidden: You do not have permission to perform this action.")
             

@@ -8,14 +8,14 @@ class LeaveRequestAdmin(admin.ModelAdmin):
     """
     Custom admin for LeaveRequest to handle action_by field automatically.
     """
-    list_display = ['employee', 'leave_type', 'start_date', 'end_date', 'status', 'action_by', 'created_at']
+    list_display = ['employee', 'leave_type', 'started_at', 'ended_at', 'status', 'action_by', 'created_at']
     list_filter = ['status', 'leave_type', 'is_half_day', 'created_at']
     search_fields = ['employee__user__email', 'employee__employee_id', 'reason']
     readonly_fields = ['action_by', 'created_at', 'updated_at', 'duration']
     
     fieldsets = (
         ('Leave Details', {
-            'fields': ('employee', 'leave_type', 'start_date', 'end_date', 'reason')
+            'fields': ('employee', 'leave_type', 'started_at', 'ended_at', 'reason')
         }),
         ('Half-Day Options', {
             'fields': ('is_half_day', 'half_day_period'),

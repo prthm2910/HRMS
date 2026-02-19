@@ -1,10 +1,11 @@
 from django.db import models
+from django.conf import settings
 import uuid
 # Create your models here.
 # ------------------------------------------------------------------
 # CONCEPT: Abstract Base Classes (Don't Repeat Yourself)
 # ------------------------------------------------------------------
-class BaseTemplateModel(models.Model):
+class BaseModel(models.Model):
     """
     A foundational model that provides common fields for ALL other models.
     """
@@ -20,7 +21,27 @@ class BaseTemplateModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # 3. Soft Delete Pattern
+    # 3. Audit Trails (User Tracking)
+    # Tracks which user created/updated the record
+    # null=True, blank=True allows system operations without authenticated user
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_%(class)s_set',
+        help_text='User who created this record'
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_%(class)s_set',
+        help_text='User who last updated this record'
+    )
+
+    # 4. Soft Delete Pattern
     # Instead of actually deleting data (SQL DELETE), we just hide it (is_deleted=True).
     # This is critical for HR systems to maintain historical records.
     is_active = models.BooleanField(default=True)

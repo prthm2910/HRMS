@@ -1,14 +1,17 @@
+import logging
 from django.db import models
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
 from apps.organization.models import Department, Employee
+from apps.projects.constants import ProjectType, Position
 
-class Project(BaseTemplateModel):
+logger = logging.getLogger(__name__)
+
+
+class Project(BaseModel):
     """
     Represents a project or functional workgroup within a department.
     """
-    class ProjectType(models.TextChoices):
-        PERMANENT = 'PERMANENT', 'Permanent'
-        PROJECT = 'PROJECT', 'Project Based'
+    # Project type and Duration
 
     department = models.ForeignKey(
         Department,
@@ -21,11 +24,11 @@ class Project(BaseTemplateModel):
     # Project type and Duration
     project_type = models.CharField(
         max_length=20, 
-        choices=ProjectType.choices, 
-        default=ProjectType.PERMANENT
+        choices=ProjectType.choices(), 
+        default=ProjectType.PERMANENT.value
     )
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    started_at = models.DateTimeField(help_text="Project start date and time")
+    ended_at = models.DateTimeField(null=True, blank=True, help_text="Project end date and time")
     
     # Hierarchy
     parent_project = models.ForeignKey(
@@ -39,19 +42,21 @@ class Project(BaseTemplateModel):
     def __str__(self):
         return f"{self.name} ({self.department.name})"
 
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New project record created | ID: {self.id} | Name: {self.name} | Dept ID: {self.department_id} | Type: {self.project_type}")
+
+
     class Meta:
         db_table = "projects"
 
 
-class ProjectMember(BaseTemplateModel):
+class ProjectMember(BaseModel):
     """
     Represents an employee's membership in a project.
     """
-    class Position(models.TextChoices):
-        LEADER = 'LEADER', 'Project Leader'
-        CO_LEADER = 'CO_LEADER', 'Co-Leader'
-        MEMBER = 'MEMBER', 'Member'
-
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -69,12 +74,19 @@ class ProjectMember(BaseTemplateModel):
     # "Position" -> Hierarchy Rank (e.g., Leader, Member)
     position = models.CharField(
         max_length=20, 
-        choices=Position.choices, 
-        default=Position.MEMBER
+        choices=Position.choices(), 
+        default=Position.MEMBER.value
     )
     
-    date_of_joining = models.DateField()
-    date_of_leaving = models.DateField(null=True, blank=True)
+    
+    joined_at = models.DateTimeField(help_text="Date and time when member joined the project")
+    left_at = models.DateTimeField(null=True, blank=True, help_text="Date and time when member left the project")
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"Project membership initialized | Member ID: {self.id} | Project ID: {self.project_id} | Employee ID: {self.employee_id} | Position: {self.position}")
 
     def __str__(self):
         return f"{self.employee.user.username} - {self.project.name} ({self.position})"

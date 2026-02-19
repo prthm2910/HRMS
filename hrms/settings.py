@@ -11,14 +11,18 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
-import sys
 from pathlib import Path
 import environ
+import logging
 from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS, LOCAL_MIDDLEWARE 
 from hrms.config.drf import DRF_REST_FRAMEWORK
 from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
 from hrms.config.django import LOCAL_APPS
 from hrms.config.utils import get_db_config, get_simple_jwt_config
+from hrms.config.logging import LOGGING
+
+logger = logging.getLogger(__name__)
+logger.info("Starting HRMS core settings initialization")
 
 # ==============================================================================
 # 1. CORE CONFIGURATION
@@ -182,3 +186,10 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@yourcompany.com')
 
 
+# ==============================================================================
+# 14. LOGGING CONFIGURATION
+# ==============================================================================
+
+LOGGING = LOGGING
+
+logger.info("HRMS core settings initialization completed")

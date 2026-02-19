@@ -1,18 +1,21 @@
 from rest_framework import serializers
+import logging
 from django.db.models import Q
 from datetime import date
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
-from apps.base.serializers import BaseTemplateSerializer
-from apps.base.utils import calculate_working_days, is_weekend, is_holiday, get_non_working_days_info, get_employee_profile
-from apps.leaves.models import LeaveRequest, LeaveBalance
+from apps.base.serializers import BaseSerializer
+from apps.base.utils import calculate_working_and_non_working_days, is_weekend, is_holiday, get_employee_profile
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType, HalfDayPeriod
 from apps.organization.models import Employee
 from apps.organization.serializers import EmployeeBasicSerializer
+
+logger = logging.getLogger(__name__)
 
 # Note: EmployeeBasicSerializer is now imported from organization.serializers
 # It already includes nested department field
 
-class LeaveBalanceSerializer(BaseTemplateSerializer):
+class LeaveBalanceSerializer(BaseSerializer):
     leave_type_display = serializers.CharField(source='get_leave_type_display', read_only=True)
     
     # Remaining leaves calculation (supports half-days: e.g., 9.5)
@@ -31,14 +34,14 @@ class LeaveBalanceSerializer(BaseTemplateSerializer):
 
     class Meta:
         model = LeaveBalance
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'employee', 'employee_id',
             'leave_type', 'leave_type_display', 
             'total_allocated', 'used_leaves', 'remaining_leaves'
         ]
 
 
-class LeaveRequestSerializer(BaseTemplateSerializer):
+class LeaveRequestSerializer(BaseSerializer):
     """
     Default Serializer for List and Create.
     Security: 'status' is Read-Only here so no one can create an 'APPROVED' leave directly.
@@ -63,9 +66,9 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     
     class Meta:
         model = LeaveRequest
-        fields = BaseTemplateSerializer.Meta.fields + [
+        fields = BaseSerializer.Meta.fields + [
             'employee',
-            'leave_type', 'start_date', 'end_date', 'reason',
+            'leave_type', 'started_at', 'ended_at', 'reason',
             'status', 'rejection_reason', 
             'action_by_details',
             'duration',
@@ -81,14 +84,19 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         Get information about holidays and weekends in the leave period.
         Helps employees and approvers understand actual working days.
         """
-        if not obj.start_date or not obj.end_date:
+        if not obj.started_at or not obj.ended_at:
             return {'total_count': 0, 'details': []}
         
-        return get_non_working_days_info(obj.start_date, obj.end_date)
+        # Convert datetime to date for utility function
+        res = calculate_working_and_non_working_days(obj.started_at.date(), obj.ended_at.date())
+        return {
+            'total_count': res['non_working_days'],
+            'details': res['details']
+        }
 
     def validate(self, data):
-        start = data.get('start_date')
-        end = data.get('end_date')
+        start = data.get('started_at')
+        end = data.get('ended_at')
         
         request = self.context.get('request')
         user = request.user if request else None
@@ -98,34 +106,36 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
         if start and end:
             if start > end:
                 raise serializers.ValidationError({
-                    "end_date": "End date cannot be before start date."
+                    "ended_at": "End date cannot be before start date."
                 })
+            
+            logger.debug(f"Validating leave period | Request ID: {self.instance.id if self.instance else 'NEW'} | Period: {start} to {end} | User ID: {user.id if user else 'N/A'}")
             
             # Allow same-day half-day leaves for emergencies
             is_half_day = data.get('is_half_day', False)
             
             if not is_half_day:
                 # Full-day leaves must be in the future
-                if start < date.today():
+                if start.date() < date.today():
                     raise serializers.ValidationError({
-                        "start_date": "Full-day leave requests must be for future dates. For same-day emergencies, please use half-day leave."
+                        "started_at": "Full-day leave requests must be for future dates. For same-day emergencies, please use half-day leave."
                     })
             else:
                 # Half-day leaves can be on the same day, but not in the past
-                if start < date.today():
+                if start.date() < date.today():
                     raise serializers.ValidationError({
-                        "start_date": "Half-day leave cannot be applied for past dates."
+                        "started_at": "Half-day leave cannot be applied for past dates."
                     })
         
         # 2. WEEKEND VALIDATION - Reject if start or end date is on weekend
         if start and is_weekend(start):
             raise serializers.ValidationError({
-                "start_date": f"Start date cannot be on a weekend. {start.strftime('%Y-%m-%d')} is a {start.strftime('%A')}."
+                "started_at": f"Start date cannot be on a weekend. {start.strftime('%Y-%m-%d')} is a {start.strftime('%A')}."
             })
         
         if end and is_weekend(end):
             raise serializers.ValidationError({
-                "end_date": f"End date cannot be on a weekend. {end.strftime('%Y-%m-%d')} is a {end.strftime('%A')}."
+                "ended_at": f"End date cannot be on a weekend. {end.strftime('%Y-%m-%d')} is a {end.strftime('%A')}."
             })
         
         # 3. HOLIDAY VALIDATION - Reject leaves starting or ending on holidays
@@ -134,7 +144,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             if is_start_holiday:
                 holiday_name = start_holiday_info.get('name', 'Holiday')
                 raise serializers.ValidationError({
-                    "start_date": f"Cannot start leave on {start.strftime('%Y-%m-%d')} as it is a declared holiday ({holiday_name})."
+                    "started_at": f"Cannot start leave on {start.strftime('%Y-%m-%d')} as it is a declared holiday ({holiday_name})."
                 })
         
         if end:
@@ -142,7 +152,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             if is_end_holiday:
                 holiday_name = end_holiday_info.get('name', 'Holiday')
                 raise serializers.ValidationError({
-                    "end_date": f"Cannot end leave on {end.strftime('%Y-%m-%d')} as it is a declared holiday ({holiday_name})."
+                    "ended_at": f"Cannot end leave on {end.strftime('%Y-%m-%d')} as it is a declared holiday ({holiday_name})."
                 })
 
         # 4. HALF-DAY VALIDATIONS
@@ -153,7 +163,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             # Half-day must have same start and end date
             if start and end and start != end:
                 raise serializers.ValidationError({
-                    "end_date": "Half-day leave must have the same start and end date."
+                    "ended_at": "Half-day leave must have the same start and end date."
                 })
             
             # Half-day period is required
@@ -172,31 +182,31 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                 # Check for exact same half-day period
                 same_half_requests = LeaveRequest.objects.filter(
                     employee=employee,
-                    start_date=start,
-                    end_date=end,
+                    started_at=start,
+                    ended_at=end,
                     is_half_day=True,
                     half_day_period=half_day_period,
-                    status__in=['PENDING', 'APPROVED']
+                    status__in=[LeaveRequestStatus.PENDING.value, LeaveRequestStatus.APPROVED.value]
                 )
                 
                 if self.instance:
                     same_half_requests = same_half_requests.exclude(id=self.instance.id)
                 
                 if same_half_requests.exists():
-                    period_display = 'First Half' if half_day_period == 'FIRST_HALF' else 'Second Half'
+                    period_display = 'First Half' if half_day_period == HalfDayPeriod.FIRST_HALF.value else 'Second Half'
                     raise serializers.ValidationError(
                         f"You already have a {period_display} leave request for {start.strftime('%Y-%m-%d')}."
                     )
                 
                 # Check if both halves are already taken
-                other_half_period = 'SECOND_HALF' if half_day_period == 'FIRST_HALF' else 'FIRST_HALF'
+                other_half_period = HalfDayPeriod.SECOND_HALF.value if half_day_period == HalfDayPeriod.FIRST_HALF.value else HalfDayPeriod.FIRST_HALF.value
                 other_half_requests = LeaveRequest.objects.filter(
                     employee=employee,
-                    start_date=start,
-                    end_date=end,
+                    started_at=start,
+                    ended_at=end,
                     is_half_day=True,
                     half_day_period=other_half_period,
-                    status__in=['PENDING', 'APPROVED']
+                    status__in=[LeaveRequestStatus.PENDING.value, LeaveRequestStatus.APPROVED.value]
                 )
                 
                 if self.instance:
@@ -210,20 +220,21 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
             # Standard overlap check for all leave types
             overlapping_requests = LeaveRequest.objects.filter(
                 employee=employee,
-                status__in=['PENDING', 'APPROVED']
+                status__in=[LeaveRequestStatus.PENDING.value, LeaveRequestStatus.APPROVED.value]
             ).filter(
-                Q(start_date__lte=end) & Q(end_date__gte=start)
+                Q(started_at__date__lte=end) & Q(ended_at__date__gte=start)
             )
             
             if self.instance:
                 overlapping_requests = overlapping_requests.exclude(id=self.instance.id)
 
-            if overlapping_requests.exists():
-                conflict = overlapping_requests.first()
-                if conflict:
-                    raise serializers.ValidationError(
-                        f"You already have a leave request for this period ({conflict.start_date} to {conflict.end_date})." 
-                    )
+                if overlapping_requests.exists():
+                    conflict = overlapping_requests.first()
+                    if conflict:
+                        logger.warning(f"Overlap detected | Requested: {start} to {end} | Conflict ID: {conflict.id} | User ID: {user.id if user else 'N/A'}")
+                        raise serializers.ValidationError(
+                            f"You already have a leave request for this period ({conflict.started_at.date()} to {conflict.ended_at.date()})." 
+                        )
 
         # 6. Balance Check (Only on CREATE)
         if request and request.method == 'POST' and employee:
@@ -237,7 +248,9 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                     excluded_holidays = []
                 else:
                     # Use utility function for working days calculation (now returns tuple)
-                    days_requested, excluded_holidays = calculate_working_days(start, end)
+                    res = calculate_working_and_non_working_days(start, end)
+                    days_requested = res['working_days']
+                    excluded_holidays = res['holidays']
                     days_requested = float(days_requested)
                     
                     # Reject if all days are non-working days (weekends/holidays)
@@ -252,7 +265,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                 if excluded_holidays:
                     calendar_days = (end - start).days + 1
                     for holiday in excluded_holidays:
-                        print(f"  - {holiday['date']} ({holiday['name']}) is a holiday")
+                        print(f"  - {holiday['holiday_date']} ({holiday['name']}) is a holiday")
                     print("="*70 + "\n")
                 
                 try:
@@ -262,10 +275,12 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
                     )
                     
                     if balance_record.remaining_leaves < days_requested:
+                        logger.warning(f"Insufficient balance | Requested: {days_requested} | Available: {balance_record.remaining_leaves} | Type: {leave_type} | User ID: {user.id if user else 'N/A'}")
                         raise serializers.ValidationError(
                             f"Insufficient Balance. You have {balance_record.remaining_leaves} {leave_type} leaves left."
                         )
                 except LeaveBalance.DoesNotExist:
+                     logger.error(f"Integrity Error: No LeaveBalance record found for employee {employee.id} type {leave_type}")
                      raise serializers.ValidationError(f"Leave balance record not found for {leave_type}.")
 
         return data
@@ -273,6 +288,7 @@ class LeaveRequestSerializer(BaseTemplateSerializer):
     def create(self, validated_data):
         user = self.context['request'].user
         validated_data['employee'] = user.employee_profile
+        logger.info(f"Creating leave request | User ID: {user.id} | Type: {validated_data.get('leave_type')} | Period: {validated_data.get('started_at').date()} to {validated_data.get('ended_at').date()}")
         return super().create(validated_data)
 
 
@@ -282,7 +298,7 @@ class LeaveUpdateSerializer(LeaveRequestSerializer):
     Explicitly blocks 'status' changes with a clear error message.
     """
     class Meta(LeaveRequestSerializer.Meta):
-        fields = ['start_date', 'end_date', 'reason', 'leave_type', 'is_half_day', 'half_day_period']
+        fields = ['started_at', 'ended_at', 'reason', 'leave_type', 'is_half_day', 'half_day_period']
 
     def validate(self, data):
         # We look at the raw request data to see if 'status' was sent
@@ -308,7 +324,7 @@ class LeaveActionSerializer(serializers.ModelSerializer):
         fields = ['status', 'rejection_reason']
 
     def validate_status(self, value):
-        if value not in ['APPROVED', 'REJECTED']:
+        if value not in [LeaveRequestStatus.APPROVED.value, LeaveRequestStatus.REJECTED.value]:
             raise serializers.ValidationError("Managers can only set status to APPROVED or REJECTED.")
         return value
 

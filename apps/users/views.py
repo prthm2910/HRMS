@@ -1,9 +1,13 @@
+import logging
 from rest_framework import generics, permissions                
 from django.contrib.auth import get_user_model
 
 from apps.users.serializers import RegisterSerializer, UserSerializer
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
+
 
 # 1. Registration View
 class RegisterView(generics.CreateAPIView):
@@ -29,4 +33,5 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         # This overrides the default "lookup by ID" behavior.
         # Instead of looking for ID 5, it just returns "Me".
+        logger.debug(f"Authorized profile access attempt | User ID: {self.request.user.id} | Action: {self.request.method}")
         return self.request.user

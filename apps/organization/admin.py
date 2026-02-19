@@ -12,4 +12,4 @@ class HODAdmin(admin.ModelAdmin):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'employee_id', 'department', 'designation', 'employment_type', 'date_of_joining')
+    list_display = ('user', 'employee_id', 'department', 'designation', 'employment_type', 'joined_at')

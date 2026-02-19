@@ -1,7 +1,11 @@
 from rest_framework import serializers
+from django.db import models
 from datetime import date as date_type
 from apps.holidays.models import Holiday
-from apps.base.serializers import BaseTemplateSerializer
+from apps.base.serializers import BaseSerializer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -9,7 +13,7 @@ from apps.base.serializers import BaseTemplateSerializer
 # Django REST Framework Serializers
 # ============================================================================
 
-class HolidaySerializer(BaseTemplateSerializer):
+class HolidaySerializer(BaseSerializer):
     """
     Main serializer for Holiday model.
     Used for CRUD operations via API.
@@ -17,8 +21,8 @@ class HolidaySerializer(BaseTemplateSerializer):
     
     class Meta:
         model = Holiday
-        fields = BaseTemplateSerializer.Meta.fields + [
-            'date',
+        fields = BaseSerializer.Meta.fields + [
+            'holiday_date',
             'name',
             'description',
             'is_recurring',
@@ -36,7 +40,7 @@ class HolidaySerializer(BaseTemplateSerializer):
             )
         return value.strip()
     
-    def validate_date(self, value):
+    def validate_holiday_date(self, value):
         """Validate that new holidays are not in the past"""
         # Only validate for creation, not updates
         if not self.instance and value < date_type.today():
@@ -48,13 +52,13 @@ class HolidaySerializer(BaseTemplateSerializer):
     def validate(self, data):
         """Cross-field validation"""
         # Check for duplicate date + region combination
-        date_val = data.get('date')
+        date_val = data.get('holiday_date')
         region_val = data.get('region', '')
         
         if date_val:
             # Build query
             query = Holiday.objects.filter(
-                date=date_val,
+                holiday_date=date_val,
                 region=region_val,
                 is_deleted=False
             )
@@ -64,8 +68,9 @@ class HolidaySerializer(BaseTemplateSerializer):
                 query = query.exclude(pk=self.instance.pk)
             
             if query.exists():
+                logger.warning(f"Holiday validation rejected | Duplicate found | Date: {date_val} | Region: {region_val}")
                 raise serializers.ValidationError({
-                    'date': f'A holiday already exists on {date_val} for region "{region_val or "All"}"'
+                    'holiday_date': f'A holiday already exists on {date_val} for region "{region_val or "All"}"'
                 })
         
         return data
@@ -120,25 +125,42 @@ class BulkHolidayCreateSerializer(serializers.Serializer):
         created_holidays = []
         skipped_holidays = []
         
-        for holiday_data in holidays_data:
-            # Check if holiday already exists
-            exists = Holiday.objects.filter(
-                date=holiday_data['date'],
-                region=holiday_data.get('region', ''),
+        # Optimization: Perform bulk duplicate check with a single query
+        # Extract all date-region pairs for checking
+        date_region_pairs = [(h['holiday_date'], h.get('region', '')) for h in holidays_data]
+        
+        # Single query to check all existing holidays
+        existing_holidays = set(
+            Holiday.objects.filter(
                 is_deleted=False
-            ).exists()
+            ).filter(
+                models.Q(*[
+                    models.Q(holiday_date=date, region=region) 
+                    for date, region in date_region_pairs
+                ])
+            ).values_list('holiday_date', 'region')
+        )
+        
+        # Separate holidays into create and skip lists
+        holidays_to_create = []
+        for holiday_data in holidays_data:
+            date_region = (holiday_data['holiday_date'], holiday_data.get('region', ''))
             
-            if exists:
+            if date_region in existing_holidays:
                 skipped_holidays.append({
-                    'date': str(holiday_data['date']),
+                    'holiday_date': str(holiday_data['holiday_date']),
                     'name': holiday_data['name'],
                     'region': holiday_data.get('region', ''),
                     'reason': 'Holiday already exists on this date for this region'
                 })
             else:
-                # Create the holiday
-                holiday = Holiday.objects.create(**holiday_data)
-                created_holidays.append(holiday)
+                holidays_to_create.append(Holiday(**holiday_data))
+        
+        # Optimization: Use bulk_create for all new holidays in a single query
+        if holidays_to_create:
+            created_holidays = Holiday.objects.bulk_create(holidays_to_create)
+        
+        logger.info(f"Bulk holiday creation completed | Success: {len(created_holidays)} | Skipped: {len(skipped_holidays)}")
         
         return {
             'created': created_holidays,
@@ -154,7 +176,7 @@ class HolidayListSerializer(HolidaySerializer):
     class Meta(HolidaySerializer.Meta):
         fields = [
             'id',
-            'date',
+            'holiday_date',
             'name',
             'region',
             'is_recurring',

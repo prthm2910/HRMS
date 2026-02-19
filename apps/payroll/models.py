@@ -1,22 +1,17 @@
+import logging
 import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
 from apps.organization.models import Employee
+from apps.payroll.constants import ComponentType, CalculationMethod, PayrollStatus
+
+logger = logging.getLogger(__name__)
 
 
-class SalaryComponent(BaseTemplateModel):
+class SalaryComponent(BaseModel):
     """Define reusable salary components"""
-    
-    class ComponentType(models.TextChoices):
-        EARNING = 'EARNING', 'Earning'
-        DEDUCTION = 'DEDUCTION', 'Deduction'
-        BONUS = 'BONUS', 'Bonus'
-    
-    class CalculationMethod(models.TextChoices):
-        FIXED = 'FIXED', 'Fixed Amount'
-        PERCENTAGE = 'PERCENTAGE', 'Percentage of Base'
     
     # Auto-generated slug from name (primary business identifier)
     code = models.SlugField(
@@ -36,12 +31,12 @@ class SalaryComponent(BaseTemplateModel):
     name = models.CharField(max_length=100, unique=True)
     component_type = models.CharField(
         max_length=20,
-        choices=ComponentType.choices
+        choices=ComponentType.choices()
     )
     calculation_method = models.CharField(
         max_length=20,
-        choices=CalculationMethod.choices,
-        default=CalculationMethod.FIXED
+        choices=CalculationMethod.choices(),
+        default=CalculationMethod.FIXED.value
     )
     is_taxable = models.BooleanField(default=True)
     default_value = models.DecimalField(
@@ -56,6 +51,7 @@ class SalaryComponent(BaseTemplateModel):
     
     def save(self, *args, **kwargs):
         # Auto-generate code from name if not provided
+        is_new = self._state.adding
         if not self.code:
             from django.utils.text import slugify
             self.code = slugify(self.name)
@@ -66,14 +62,17 @@ class SalaryComponent(BaseTemplateModel):
             while SalaryComponent.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for salary component | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New salary component created | Code: {self.code} | Type: {self.component_type}")
     
     def __str__(self):
         return f"{self.name} ({self.get_component_type_display()})"
 
 
-class EmployeeSalaryStructure(BaseTemplateModel):
+class EmployeeSalaryStructure(BaseModel):
     """Employee-specific salary breakdown"""
     
     # Business identifier (exposed in APIs)
@@ -98,19 +97,25 @@ class EmployeeSalaryStructure(BaseTemplateModel):
         decimal_places=2,
         validators=[MinValueValidator(0)]
     )
-    effective_from = models.DateField()
-    effective_to = models.DateField(null=True, blank=True)
+    effective_from_at = models.DateTimeField(
+        help_text="Date and time from which this salary structure is effective"
+    )
+    effective_to_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="Date and time when this salary structure expires"
+    )
     
     class Meta:
         db_table = 'employee_salary_structures'
-        ordering = ['-effective_from']
-        unique_together = ['employee', 'salary_component', 'effective_from']
+        ordering = ['-effective_from_at']
+        unique_together = ['employee', 'salary_component', 'effective_from_at']
     
     def __str__(self):
         return f"{self.employee.user.get_full_name()} - {self.salary_component.name}"
 
 
-class TaxRule(BaseTemplateModel):
+class TaxRule(BaseModel):
     """Configurable tax slabs"""
     
     # Auto-generated slug from name (primary business identifier)
@@ -158,6 +163,7 @@ class TaxRule(BaseTemplateModel):
     
     def save(self, *args, **kwargs):
         # Auto-generate code from name if not provided
+        is_new = self._state.adding
         if not self.code:
             from django.utils.text import slugify
             self.code = slugify(self.name)
@@ -168,18 +174,14 @@ class TaxRule(BaseTemplateModel):
             while TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for tax rule | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New tax rule created | Code: {self.code} | Country: {self.country}")
 
 
-class PayrollStatus(models.TextChoices):
-    DRAFT = 'DRAFT', 'Draft'
-    PROCESSING = 'PROCESSING', 'Processing'
-    COMPLETED = 'COMPLETED', 'Completed'
-    FAILED = 'FAILED', 'Failed'
-
-
-class PayrollRun(BaseTemplateModel):
+class PayrollRun(BaseModel):
     
     # Auto-generated slug from month/year (primary business identifier)
     code = models.SlugField(
@@ -204,8 +206,8 @@ class PayrollRun(BaseTemplateModel):
     )
     status = models.CharField(
         max_length=20,
-        choices=PayrollStatus.choices,
-        default=PayrollStatus.DRAFT
+        choices=PayrollStatus.choices(),
+        default=PayrollStatus.DRAFT.value
     )
     processed_at = models.DateTimeField(null=True, blank=True)
     processed_by = models.ForeignKey(
@@ -240,6 +242,7 @@ class PayrollRun(BaseTemplateModel):
     
     def save(self, *args, **kwargs):
         """Auto-generate code from month/year if not provided"""
+        is_new = self._state.adding
         if not self.code:
             from apps.base.utils import get_month_name
             from django.utils.text import slugify
@@ -253,11 +256,14 @@ class PayrollRun(BaseTemplateModel):
             while PayrollRun.objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = f"{original_code}-v{counter}"
                 counter += 1
+            logger.debug(f"Auto-generated code for payroll run | Code: {self.code}")
         
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New payroll run initialized | Code: {self.code} | Month: {self.month} | Year: {self.year}")
 
 
-class Payslip(BaseTemplateModel):
+class Payslip(BaseModel):
     """Individual employee payslip"""
     
     # Business identifier (exposed in APIs)
@@ -311,6 +317,7 @@ class Payslip(BaseTemplateModel):
         Generate PDF payslip using hybrid approach (WeasyPrint + ReportLab)
         Saves the PDF to the pdf_file field
         """
+        logger.info(f"Initiating PDF generation for payslip | ID: {self.payslip_id} | Employee: {self.employee.employee_id}")
         from django.core.files.base import ContentFile
         from apps.payroll.services.pdf_generator import generate_payslip_pdf
         
@@ -325,13 +332,10 @@ class Payslip(BaseTemplateModel):
 
 
 
-class PayslipComponent(BaseTemplateModel):
+class PayslipComponent(BaseModel):
     """Breakdown of each payslip"""
     
-    class ComponentType(models.TextChoices):
-        EARNING = 'EARNING', 'Earning'
-        DEDUCTION = 'DEDUCTION', 'Deduction'
-        BONUS = 'BONUS', 'Bonus'
+    # ComponentType is imported from apps.payroll.constants
     
     # Business identifier (exposed in APIs)
     payslip_component_id = models.UUIDField(
@@ -348,7 +352,7 @@ class PayslipComponent(BaseTemplateModel):
     component_name = models.CharField(max_length=100)
     component_type = models.CharField(
         max_length=20,
-        choices=ComponentType.choices
+        choices=ComponentType.choices()
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     
@@ -360,7 +364,7 @@ class PayslipComponent(BaseTemplateModel):
         return f"{self.payslip} - {self.component_name}: {self.amount}"
 
 
-class PayrollAutomationConfig(BaseTemplateModel):
+class PayrollAutomationConfig(BaseModel):
     """Settings for automated payroll"""
     
     # Business identifier (exposed in APIs)
