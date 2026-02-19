@@ -5,6 +5,8 @@ from datetime import timedelta
 import threading
 import calendar
 import logging
+import string
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +226,22 @@ def is_holiday(check_date, region=None):
         return False, None
 
 
-# Function and logic merged into calculate_working_and_non_working_days
-pass
+
+def generate_unique_id(model_class, field_name: str, prefix: str = "", length: int = 6) -> str:
+    """
+    Generates a unique, alphanumeric ID for a Django model instance.
+    """
+    # Alphanumeric character set (0-9, A-Z)
+    alphabet = string.ascii_uppercase + string.digits
+    
+    while True:
+        # Generate random suffix
+        random_suffix = ''.join(secrets.choice(alphabet) for _ in range(length))
+        new_id = f"{prefix}{random_suffix}"
+        
+        # Check uniqueness in the database
+        if not model_class.objects.filter(**{field_name: new_id}).exists():
+            return new_id
 
 
 def get_employee_profile(user):
