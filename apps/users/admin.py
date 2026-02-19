@@ -10,7 +10,7 @@ class CustomUserAdmin(UserAdmin):
     # 1. List View Customization
     # Controls columns in the user list table.
     # Added 'phone_number' which isn't there by default.
-    list_display = ['username', 'email', 'phone_number', 'is_staff']
+    list_display = ['user_id', 'username', 'email', 'phone_number', 'is_staff']
 
     # 2. Edit Page Customization (Fieldsets)
     # Django's default UserAdmin doesn't know about 'bio' or 'phone_number'.
