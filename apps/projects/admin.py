@@ -14,6 +14,6 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(ProjectMember)
 class ProjectMemberAdmin(admin.ModelAdmin):
-    list_display = ('project_member_id', 'employee', 'project', 'role', 'position', 'joined_at', 'is_active')
+    list_display = ('member_id', 'employee', 'project', 'role', 'position', 'joined_at', 'is_active')
     list_filter = ('project', 'position', 'is_active')
     search_fields = ('employee__user__username', 'project__name', 'role')
