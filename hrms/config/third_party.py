@@ -5,6 +5,7 @@ THIRD_PARTY_APPS = [
     'django_filters',              # Advanced filtering
     'drf_spectacular',             # For API Schema and Docs
     'phonenumber_field',           # Standardized phone numbers
+    'rest_framework_simplejwt.token_blacklist', # For blacklisting tokens (Logout)
 ]
 
 SPECTACULAR_CONFIG = {

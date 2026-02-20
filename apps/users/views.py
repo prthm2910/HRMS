@@ -1,8 +1,14 @@
 import logging
 from rest_framework import generics, permissions                
+from rest_framework.response import Response
+
 from django.contrib.auth import get_user_model
 
 from apps.users.serializers import RegisterSerializer, UserSerializer
+from apps.users.serializers import LogoutSerializer
+
+from drf_spectacular.utils import extend_schema
+
 
 User = get_user_model()
 
@@ -35,3 +41,24 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         # Instead of looking for ID 5, it just returns "Me".
         logger.debug(f"Authorized profile access attempt | User ID: {self.request.user.id} | Action: {self.request.method}")
         return self.request.user
+
+
+# 3. Logout View (Blacklist JWT)
+
+@extend_schema(tags=['Authentication'])
+class LogoutView(generics.GenericAPIView):
+    """
+    Endpoint: /api/auth/logout/
+    Permission: IsAuthenticated
+    Logic: Blacklists the provided refresh token.
+    """
+    serializer_class = LogoutSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        logger.info(f"User logged out successfully | User ID: {request.user.id}")
+        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
