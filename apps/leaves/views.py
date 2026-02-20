@@ -55,10 +55,12 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         user = self.request.user
         employee_profile = get_employee_profile(user)
         if not employee_profile:
+            logger.warning(f"MyLeaveRequestViewSet: No employee profile found for user {user.email}")
             return LeaveRequest.objects.none()
         
         # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
         queryset = LeaveRequest.objects.filter(employee=employee_profile).select_related('employee__user', 'employee__department')
+        logger.debug(f"MyLeaveRequestViewSet: Found {queryset.count()} requests for employee {employee_profile.employee_id}")
         
         # Existing status filter
         status_filter = self.request.query_params.get('status')
@@ -103,9 +105,11 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         else:
             employee_profile = get_employee_profile(user)
             if not employee_profile:
+                logger.warning(f"SubordinateLeaveRequestViewSet: No employee profile found for user {user.email}")
                 return LeaveRequest.objects.none()
             # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
             queryset = LeaveRequest.objects.filter(employee__manager=employee_profile).select_related('employee__user', 'employee__department')
+            logger.debug(f"SubordinateLeaveRequestViewSet: Found {queryset.count()} requests for manager {employee_profile.employee_id}")
         
         status_filter = self.request.query_params.get('status', 'pending')
         if status_filter.lower() != 'all':

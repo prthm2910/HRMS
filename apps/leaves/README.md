@@ -105,12 +105,17 @@ Unauthorized status changes are explicitly blocked at the serializer and view le
 ## 📡 API Endpoints
 
 ### 📝 Leave Requests  
-`/api/leaves/requests/`
+- `/api/leaves/my-requests/` → View your own leave requests
+- `/api/leaves/subordinates/` → *(Managers)* View team's leave requests
+- `/api/leaves/apply/` → Apply for leave or update existing requests
 
-- **GET /**  
-  List leave requests (scope filtered by role)
+- **GET /api/leaves/my-requests/**  
+  List leave requests for the authenticated user only.
 
-- **POST /**  
+- **GET /api/leaves/subordinates/**  
+  List leave requests from direct reports.
+
+- **POST /api/leaves/apply/**  
   Apply for new leave  
   ```json
   {
