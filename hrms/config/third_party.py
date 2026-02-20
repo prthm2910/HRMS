@@ -14,7 +14,8 @@ SPECTACULAR_CONFIG = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'ENUM_NAME_OVERRIDES': {
-        'PayrollStatus': 'apps.payroll.models.PayrollStatus',
-        'LeaveRequestStatus': 'apps.leaves.models.LeaveRequestStatus',
+        'LeaveRequestStatus': 'apps.leaves.constants.LeaveRequestStatus',
+        'PayrollStatus': 'apps.payroll.constants.PayrollStatus',
+        'AIOperationLogStatus': 'apps.audit.constants.AIOperationLogStatus',
     },
 }

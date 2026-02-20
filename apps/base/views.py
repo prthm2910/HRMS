@@ -138,6 +138,10 @@ class RoleFilteredMixin:
     def get_queryset(self):
         user = self.request.user
         
+        # Handle Schema Generation / Anonymous Users
+        if getattr(self, "swagger_fake_view", False) or user.is_anonymous:
+            return self.get_queryset_model().objects.none()
+        
         # 1. Admin/Staff bypass
         if user.is_superuser or user.is_staff:
             logger.debug(f"Role Filter Bypass | Table: {self.get_queryset_model().__name__} | User ID: {user.id} | Role: Admin/Staff")

@@ -50,12 +50,19 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     Returns all leave requests created by the authenticated user.
     """
     serializer_class = LeaveRequestSerializer
+    queryset = LeaveRequest.objects.none()  # Hint for spectacular
 
     def get_queryset(self):
         user = self.request.user
+        
+        # DRF-Spectacular (Schema Generation) uses a "fake" view with AnonymousUser.
+        # We must return early to avoid "AnonymousUser has no attribute 'email'".
+        if getattr(self, "swagger_fake_view", False) or user.is_anonymous:
+            return LeaveRequest.objects.none()
+
         employee_profile = get_employee_profile(user)
         if not employee_profile:
-            logger.warning(f"MyLeaveRequestViewSet: No employee profile found for user {user.email}")
+            logger.warning(f"MyLeaveRequestViewSet: No employee profile found for user {user}")
             return LeaveRequest.objects.none()
         
         # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
@@ -97,15 +104,21 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
     View for managers to see leave requests from their subordinates.
     """
     serializer_class = LeaveRequestSerializer
+    queryset = LeaveRequest.objects.none()  # Hint for spectacular
 
     def get_queryset(self):
         user = self.request.user
+
+        # Handle Schema Generation / Anonymous Users
+        if getattr(self, "swagger_fake_view", False) or user.is_anonymous:
+            return LeaveRequest.objects.none()
+
         if user.is_superuser or user.is_staff:
             queryset = LeaveRequest.objects.all()
         else:
             employee_profile = get_employee_profile(user)
             if not employee_profile:
-                logger.warning(f"SubordinateLeaveRequestViewSet: No employee profile found for user {user.email}")
+                logger.warning(f"SubordinateLeaveRequestViewSet: No employee profile found for user {user}")
                 return LeaveRequest.objects.none()
             # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
             queryset = LeaveRequest.objects.filter(employee__manager=employee_profile).select_related('employee__user', 'employee__department')
