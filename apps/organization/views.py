@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from apps.base.views import (
     AdminWriteViewSet, 
     DeleteMixin, 
@@ -49,7 +49,31 @@ class DepartmentViewSet(DeleteMixin, AdminWriteViewSet):
     serializer_class = DepartmentSerializer
 
 
-@extend_schema(tags=['Employees'])
+@extend_schema(
+    tags=['Employees'],
+    examples=[
+        OpenApiExample(
+            'Create Employee',
+            description='Example request to create a new employee with identity details',
+            value={
+                'user_first_name': 'John',
+                'user_last_name': 'Doe',
+                'user_email': 'john.doe@example.com',
+                'user_password': 'securepassword123',
+                'user_mobile_number': '+919876543210',
+                'user_bio': 'Hello, I am a software engineer.',
+                'designation': 'Software Engineer',
+                'employment_type': 'FULL TIME',
+                'salary': 50000,
+                'department_id': 'DEPTA1B2C3',
+                'manager_id': 'EMPA1B2C3',
+                'joined_at': '2026-02-20',
+                'born_at': '1995-05-15'
+            },
+            request_only=True,
+        ),
+    ]
+)
 class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
     """
     Employee Management.
