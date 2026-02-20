@@ -12,7 +12,7 @@ from apps.payroll.models import (
 
 @admin.register(SalaryComponent)
 class SalaryComponentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'component_type', 'calculation_method', 'is_taxable', 'default_value', 'created_at']
+    list_display = ['salary_component_id', 'name', 'component_type', 'calculation_method', 'is_taxable', 'default_value', 'created_at']
     list_filter = ['component_type', 'calculation_method', 'is_taxable']
     search_fields = ['name']
     ordering = ['component_type', 'name']
@@ -20,7 +20,7 @@ class SalaryComponentAdmin(admin.ModelAdmin):
 
 @admin.register(EmployeeSalaryStructure)
 class EmployeeSalaryStructureAdmin(admin.ModelAdmin):
-    list_display = ['employee', 'salary_component', 'amount', 'effective_from_at', 'effective_to_at']
+    list_display = ['employee_salary_structure_id', 'employee', 'salary_component', 'amount', 'effective_from_at', 'effective_to_at']
     list_filter = ['salary_component', 'effective_from_at']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     raw_id_fields = ['employee', 'salary_component']
@@ -29,7 +29,7 @@ class EmployeeSalaryStructureAdmin(admin.ModelAdmin):
 
 @admin.register(TaxRule)
 class TaxRuleAdmin(admin.ModelAdmin):
-    list_display = ['name', 'country', 'min_income', 'max_income', 'tax_percentage', 'is_active']
+    list_display = ['tax_rule_id', 'name', 'country', 'min_income', 'max_income', 'tax_percentage', 'is_active']
     list_filter = ['country', 'is_active']
     search_fields = ['name']
     ordering = ['country', 'min_income']
@@ -37,7 +37,7 @@ class TaxRuleAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollRun)
 class PayrollRunAdmin(admin.ModelAdmin):
-    list_display = ['month', 'year', 'status', 'total_gross_salary', 'total_deductions', 'total_net_salary', 'processed_at', 'processed_by']
+    list_display = ['payroll_run_id', 'month', 'year', 'status', 'total_gross_salary', 'total_deductions', 'total_net_salary', 'processed_at', 'processed_by']
     list_filter = ['status', 'year', 'month']
     search_fields = ['year', 'month']
     readonly_fields = ['processed_at', 'processed_by', 'total_gross_salary', 'total_deductions', 'total_net_salary']
@@ -46,7 +46,7 @@ class PayrollRunAdmin(admin.ModelAdmin):
 
 @admin.register(Payslip)
 class PayslipAdmin(admin.ModelAdmin):
-    list_display = ['employee', 'month', 'year', 'gross_salary', 'total_deductions', 'net_salary', 'email_sent_at']
+    list_display = ['payslip_id', 'employee', 'month', 'year', 'gross_salary', 'total_deductions', 'net_salary', 'email_sent_at']
     list_filter = ['year', 'month', 'payroll_run']
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     raw_id_fields = ['employee', 'payroll_run']
@@ -62,7 +62,7 @@ class PayslipComponentInline(admin.TabularInline):
 
 @admin.register(PayslipComponent)
 class PayslipComponentAdmin(admin.ModelAdmin):
-    list_display = ['payslip', 'component_name', 'component_type', 'amount']
+    list_display = ['payslip_component_id', 'payslip', 'component_name', 'component_type', 'amount']
     list_filter = ['component_type']
     search_fields = ['payslip__employee__user__first_name', 'payslip__employee__user__last_name', 'component_name']
     raw_id_fields = ['payslip']
@@ -70,7 +70,7 @@ class PayslipComponentAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollAutomationConfig)
 class PayrollAutomationConfigAdmin(admin.ModelAdmin):
-    list_display = ['is_enabled', 'run_day', 'auto_email_payslips', 'updated_at']
+    list_display = ['payroll_automation_config_id', 'is_enabled', 'run_day', 'auto_email_payslips', 'updated_at']
     
     def has_add_permission(self, request):
         # Only allow one config instance

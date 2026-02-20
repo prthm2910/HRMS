@@ -4,6 +4,7 @@ THIRD_PARTY_APPS = [
     'corsheaders',                 # To allow Frontend access
     'django_filters',              # Advanced filtering
     'drf_spectacular',             # For API Schema and Docs
+    'phonenumber_field',           # Standardized phone numbers
 ]
 
 SPECTACULAR_CONFIG = {

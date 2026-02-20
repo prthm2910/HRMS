@@ -11,6 +11,17 @@ class Project(BaseModel):
     """
     Represents a project or functional workgroup within a department.
     """
+    project_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: PRJXXXXXX"
+    )
+
+    _display_id_prefix = 'PRJ'
+    _display_id_field = 'project_id'
+
     # Project type and Duration
 
     department = models.ForeignKey(
@@ -57,6 +68,17 @@ class ProjectMember(BaseModel):
     """
     Represents an employee's membership in a project.
     """
+    member_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: PJMXXXXXX"
+    )
+
+    _display_id_prefix = 'PJM'
+    _display_id_field = 'member_id'
+
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,

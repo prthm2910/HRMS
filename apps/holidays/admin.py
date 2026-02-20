@@ -8,6 +8,7 @@ class HolidayAdmin(admin.ModelAdmin):
     Admin interface for managing holidays.
     """
     list_display = [
+        'holiday_id',
         'holiday_date', 
         'name', 
         'region', 
@@ -69,7 +70,7 @@ class HolidayUploadAdmin(admin.ModelAdmin):
     Admin interface for viewing holiday upload history.
     """
     list_display = [
-        'id',
+        'holiday_upload_id',
         'uploaded_by',
         'extraction_status',
         'created_at',

@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from apps.base.models import BaseModel
 from apps.holidays.constants import HolidayExtractionStatus
-import uuid
 from datetime import date
 import logging
 
@@ -15,6 +14,17 @@ class Holiday(BaseModel):
     Represents company holidays that are excluded from leave calculations.
     Supports recurring holidays (auto-generates future years) and regional holidays.
     """
+    
+    holiday_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: HOLXXXXXX"
+    )
+
+    _display_id_prefix = 'HOL'
+    _display_id_field = 'holiday_id'
     
     
     holiday_date = models.DateTimeField(
@@ -32,11 +42,12 @@ class Holiday(BaseModel):
         default=False,
         help_text="If True, this holiday repeats yearly (auto-generates next 5 years)"
     )
-    recurring_group_id = models.UUIDField(
+    recurring_group_id = models.CharField(
+        max_length=50,
         null=True,
         blank=True,
         editable=False,
-        help_text="Links related recurring holidays together"
+        help_text="Links related recurring holidays together (Format: RGPXXXXXX)"
     )
     region = models.CharField(
         max_length=100,
@@ -105,8 +116,10 @@ class Holiday(BaseModel):
                 was_recurring = False
         
         # Generate recurring group ID if this is a new recurring holiday
+        # Generate recurring group ID if this is a new recurring holiday
         if is_new and self.is_recurring and not self.recurring_group_id:
-            self.recurring_group_id = uuid.uuid4()
+            from apps.base.utils import generate_unique_id
+            self.recurring_group_id = generate_unique_id(self.__class__, 'recurring_group_id', prefix='RGP', length=6)
         
         # Save the current instance first
         super().save(*args, **kwargs)
@@ -205,6 +218,16 @@ class HolidayUpload(BaseModel):
     Stores uploaded holiday images for audit trail.
     Images are stored in MEDIA_ROOT/holiday_uploads/ and only the path is stored in DB.
     """
+    holiday_upload_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: HLUXXXXXX"
+    )
+
+    _display_id_prefix = 'HLU'
+    _display_id_field = 'holiday_upload_id'
     uploaded_by = models.ForeignKey(
         'users.User',
         on_delete=models.CASCADE,

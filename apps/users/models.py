@@ -3,6 +3,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from apps.base.models import BaseModel
+from phonenumber_field.modelfields import PhoneNumberField
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,13 +19,43 @@ class User(AbstractUser, BaseModel):
     - BaseModel: Gives us UUID, created_at, is_deleted (Our custom rules).
     """
 
+    user_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: USRXXXXXX"
+    )
+
+    _display_id_prefix = 'USR'
+    _display_id_field = 'user_id'
+
     # Customization:
     # Django's default 'email' field is optional. We override it to be Unique & Required.
     email = models.EmailField(unique=True)
     
     # Extra fields not in default Django User
-    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    phone_number = PhoneNumberField(blank=True, null=True, help_text="Enter number with country code (e.g., +919876543210)")
     bio = models.TextField(blank=True, null=True)
+
+    @property
+    def phone_country_code(self):
+        """Returns the country code (e.g., '+91')"""
+        if self.phone_number:
+            return f"+{self.phone_number.country_code}"
+        return None
+
+    @property
+    def phone_national_number(self):
+        """Returns the national number (e.g., '9876543210')"""
+        if self.phone_number:
+            return str(self.phone_number.national_number)
+        return None
+
+    @property
+    def phone_full(self):
+        """Returns the full E.164 formatted number"""
+        return str(self.phone_number) if self.phone_number else None
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
