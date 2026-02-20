@@ -1,6 +1,10 @@
 import logging
+
 from rest_framework import serializers
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+
 from django.contrib.auth import get_user_model
+
 from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeBasicSerializer
 
@@ -58,7 +62,6 @@ class LogoutSerializer(serializers.Serializer):
         return attrs
 
     def save(self, **kwargs):
-        from rest_framework_simplejwt.tokens import RefreshToken, TokenError
         try:
             RefreshToken(self.token).blacklist()
         except TokenError:
