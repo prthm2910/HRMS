@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import (
      TokenRefreshView,
 )
 from rest_framework.permissions import AllowAny
-from apps.users.views import  UserProfileView
+from apps.users.views import  UserProfileView, LogoutView
 
 urlpatterns = [
     # Login Endpoint (Get Access + Refresh Token)
@@ -12,6 +12,9 @@ urlpatterns = [
     
     # Refresh Endpoint (Get new Access Token using Refresh Token)
     path('token/refresh/', TokenRefreshView.as_view(permission_classes=[AllowAny]), name='token_refresh'),
+
+    # Logout Endpoint (Blacklist Refresh Token)
+    path('logout/', LogoutView.as_view(), name='auth_logout'),
 
     # Self-Service (View/Edit my own details)
     path('profile/', UserProfileView.as_view(), name='user-profile'),

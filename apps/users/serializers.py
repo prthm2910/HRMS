@@ -73,3 +73,30 @@ class RegisterSerializer(serializers.ModelSerializer):
         logger.info(f"User registration record saved successfully | User ID: {user.id} | Email Status: Provided")
         
         return user
+
+
+# ------------------------------------------------------------------
+# 3. Logout Serializer (For JWT Blacklisting)
+# ------------------------------------------------------------------
+class LogoutSerializer(serializers.Serializer):
+    """
+    Serializer to handle logout by blacklisting the refresh token.
+    """
+    refresh = serializers.CharField(
+        help_text="The refresh token to be blacklisted"
+    )
+
+    default_error_messages = {
+        'bad_token': 'Token is invalid or expired'
+    }
+
+    def validate(self, attrs):
+        self.token = attrs['refresh']
+        return attrs
+
+    def save(self, **kwargs):
+        from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+        try:
+            RefreshToken(self.token).blacklist()
+        except TokenError:
+            self.fail('bad_token')
