@@ -15,16 +15,6 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-# 1. Registration View
-class RegisterView(generics.CreateAPIView):
-    """
-    Endpoint: /api/auth/register/
-    Permission: AllowAny (Anyone can register)
-    """
-    queryset = User.objects.all()
-    permission_classes = [permissions.AllowAny]
-    serializer_class = RegisterSerializer 
-
 
 # 2. Profile View (Get "Me")
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -45,7 +35,6 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 # 3. Logout View (Blacklist JWT)
 
-@extend_schema(tags=['Authentication'])
 class LogoutView(generics.GenericAPIView):
     """
     Endpoint: /api/auth/logout/
