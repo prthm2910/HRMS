@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from django.contrib.auth import get_user_model
 
-from apps.users.serializers import RegisterSerializer, UserSerializer
+from apps.users.serializers import  UserSerializer
 from apps.users.serializers import LogoutSerializer
 
 from drf_spectacular.utils import extend_schema
