@@ -26,7 +26,7 @@ class AIServiceConfig:
         logger.debug("Gemini Engine Config | Fetching from Django settings.")
         config = {
             'api_key': settings.GEMINI_API_KEY,
-            'model': getattr(settings, 'GEMINI_MODEL', 'gemini-1.5-flash'),
+            'model': getattr(settings, 'GEMINI_MODEL', 'gemini-3-flash-preview'),
             'timeout': getattr(settings, 'GEMINI_TIMEOUT', 30),
         }
         logger.debug(f"Gemini Engine Config | Model: {config['model']} | Timeout: {config['timeout']}s")
