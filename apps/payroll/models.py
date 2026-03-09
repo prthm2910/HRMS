@@ -5,6 +5,10 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.base.models import BaseModel
 from apps.organization.models import Employee
 from apps.payroll.constants import ComponentType, CalculationMethod, PayrollStatus
+from django.utils.text import slugify
+from apps.base.utils import get_month_name
+from django.core.files.base import ContentFile
+from apps.payroll.services.pdf_generator import generate_payslip_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,6 @@ class SalaryComponent(BaseModel):
         # Auto-generate code from name if not provided
         is_new = self._state.adding
         if not self.code:
-            from django.utils.text import slugify
             self.code = slugify(self.name)
             
             # Ensure uniqueness by appending number if needed
@@ -259,8 +262,6 @@ class PayrollRun(BaseModel):
         """Auto-generate code from month/year if not provided"""
         is_new = self._state.adding
         if not self.code:
-            from apps.base.utils import get_month_name
-            from django.utils.text import slugify
             
             month_name = get_month_name(self.month)
             self.code = slugify(f"pr-{month_name}-{self.year}")
@@ -337,8 +338,6 @@ class Payslip(BaseModel):
         Saves the PDF to the pdf_file field
         """
         logger.info(f"Initiating PDF generation for payslip | ID: {self.payslip_id} | Employee: {self.employee.employee_id}")
-        from django.core.files.base import ContentFile
-        from apps.payroll.services.pdf_generator import generate_payslip_pdf
         
         # Generate PDF bytes
         pdf_bytes = generate_payslip_pdf(self)
