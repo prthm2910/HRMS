@@ -94,6 +94,16 @@ class BaseReadOnlyAuthenticatedViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 
+class BaseReadOnlyFilteredViewSet(BaseReadOnlyAuthenticatedViewSet):
+    """
+    Base read-only viewset with authentication AND filtering/search/ordering.
+    """
+    from django_filters.rest_framework import DjangoFilterBackend
+    from rest_framework.filters import SearchFilter, OrderingFilter
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+
 class BaseAdminViewSet(viewsets.ModelViewSet):
     """
     Base viewset requiring admin privileges for all operations.
@@ -108,6 +118,16 @@ class BaseReadOnlyAdminViewSet(viewsets.ReadOnlyModelViewSet):
     Use for admin-only read operations (e.g., audit logs).
     """
     permission_classes = [permissions.IsAdminUser]
+
+
+class BaseReadOnlyAdminFilteredViewSet(BaseReadOnlyAdminViewSet):
+    """
+    Base read-only viewset requiring admin privileges WITH filtering.
+    """
+    from django_filters.rest_framework import DjangoFilterBackend
+    from rest_framework.filters import SearchFilter, OrderingFilter
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 
 
 class AdminWriteViewSet(viewsets.ModelViewSet):
