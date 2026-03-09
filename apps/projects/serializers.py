@@ -1,7 +1,6 @@
 from rest_framework import serializers
 import logging
 from apps.projects.models import Project, ProjectMember
-from apps.projects.constants import ProjectType, Position
 from apps.base.serializers import BaseSerializer
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer
 
@@ -13,7 +12,7 @@ class ProjectMemberSerializer(BaseSerializer):
     class Meta:
         model = ProjectMember
         fields = BaseSerializer.Meta.fields + [
-            'project', 'employee', 'employee_details', 'role', 
+            'member_id', 'project', 'employee', 'employee_details', 'role', 
             'position', 'joined_at', 'left_at'
         ]
 
@@ -46,7 +45,7 @@ class ParentProjectSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Project
-        fields = ['id', 'name', 'department_details', 'project_type', 'project_type_display']
+        fields = ['project_id', 'name', 'department_details', 'project_type', 'project_type_display']
 
 class ProjectSerializer(BaseSerializer):
     department_details = DepartmentSerializer(source='department', read_only=True)
@@ -74,7 +73,7 @@ class ProjectSerializer(BaseSerializer):
     class Meta:
         model = Project
         fields = BaseSerializer.Meta.fields + [
-            'department', 'department_details', 'name', 'description', 
+            'project_id', 'department', 'department_details', 'name', 'description', 
             'project_type', 'started_at', 'ended_at', 
             'parent_project', 'parent_project_details', 'members'
         ]
