@@ -6,16 +6,15 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
 from apps.base.views import (
-    BaseReadOnlyAuthenticatedViewSet,
     BaseReadOnlyFilteredViewSet,
-    SuperadminRoleViewSet,
     RoleReadOnlyViewSet,
     BaseCreateOnlyAuthenticatedViewSet,
     DeleteMixin,
-    SuperadminFullViewSet
+    RoleFullViewSet,
+    RoleFilteredMixin # Added
 )
 from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType, HalfDayPeriod
-from apps.leaves.filters import LeaveRequestFilter
+from apps.leaves.filters import LeaveRequestFilter, SubordinateLeaveRequestFilter
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -47,71 +46,50 @@ class LeaveBalanceViewSet(RoleReadOnlyViewSet):
 
 
 @extend_schema(tags=['My Leave Requests'])
-class MyLeaveRequestViewSet(BaseReadOnlyFilteredViewSet):
+class MyLeaveRequestViewSet(RoleFilteredMixin, BaseReadOnlyFilteredViewSet):
     """
     View for employees to see their own leave requests.
     Returns all leave requests created by the authenticated user.
     """
     serializer_class = LeaveRequestSerializer
-    queryset = LeaveRequest.objects.none()  # Hint for spectacular
+    queryset = LeaveRequest.objects.all()
     filterset_class = LeaveRequestFilter
     search_fields = ['reason', 'leave_request_id']
     ordering_fields = ['created_at', 'started_at']
     ordering = ['-created_at']
 
-    def get_queryset(self):
-        user = self.request.user
-        
-        # DRF-Spectacular (Schema Generation) uses a "fake" view with AnonymousUser.
-        # We must return early to avoid "AnonymousUser has no attribute 'email'".
-        if getattr(self, "swagger_fake_view", False) or user.is_anonymous:
-            return LeaveRequest.objects.none()
+    def get_admin_queryset(self):
+        return self.queryset.select_related('employee__user', 'employee__department').order_by('-created_at')
 
-        employee_profile = get_employee_profile(user)
-        if not employee_profile:
-            logger.warning(f"MyLeaveRequestViewSet: No employee profile found for user {user}")
-            return LeaveRequest.objects.none()
-        
-        # Optimization: select_related prevents N+1 queries
-        return LeaveRequest.objects.filter(
+    def get_standard_user_queryset(self, employee_profile):
+        return self.queryset.filter(
             employee=employee_profile
-        ).select_related('employee__user', 'employee__department')
+        ).select_related('employee__user', 'employee__department').order_by('-created_at')
 
 
 @extend_schema(tags=['Subordinate Leave Requests'])
-class SubordinateLeaveRequestViewSet(BaseReadOnlyFilteredViewSet):
+class SubordinateLeaveRequestViewSet(RoleFilteredMixin, BaseReadOnlyFilteredViewSet):
     """
     View for managers to see leave requests from their subordinates.
     """
     serializer_class = LeaveRequestSerializer
-    queryset = LeaveRequest.objects.none()  # Hint for spectacular
-    filterset_class = LeaveRequestFilter
+    queryset = LeaveRequest.objects.all()
+    filterset_class = SubordinateLeaveRequestFilter
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id', 'reason']
     ordering_fields = ['created_at', 'started_at']
     ordering = ['-created_at']
 
-    def get_queryset(self):
-        user = self.request.user
+    def get_admin_queryset(self):
+        return self.queryset.select_related('employee__user', 'employee__department').order_by('-created_at')
 
-        # Handle Schema Generation / Anonymous Users
-        if getattr(self, "swagger_fake_view", False) or user.is_anonymous:
-            return LeaveRequest.objects.none()
-
-        if user.is_superuser or user.is_staff:
-            queryset = LeaveRequest.objects.all()
-        else:
-            employee_profile = get_employee_profile(user)
-            if not employee_profile:
-                logger.warning(f"SubordinateLeaveRequestViewSet: No employee profile found for user {user}")
-                return LeaveRequest.objects.none()
-            
-            queryset = LeaveRequest.objects.filter(employee__manager=employee_profile)
-        
-        return queryset.select_related('employee__user', 'employee__department')
+    def get_standard_user_queryset(self, employee_profile):
+        return self.queryset.filter(
+            employee__manager=employee_profile
+        ).select_related('employee__user', 'employee__department').order_by('-created_at')
 
 
 @extend_schema(tags=['Leave Requests'])
-class LeaveApplyViewSet(DeleteMixin, SuperadminFullViewSet):
+class LeaveApplyViewSet(DeleteMixin, RoleFullViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
@@ -121,7 +99,7 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminFullViewSet):
     queryset = LeaveRequest.objects.all()
     serializer_class = LeaveRequestSerializer
     filterset_class = LeaveRequestFilter
-    search_fields = ['reason', 'leave_request_id']
+    search_fields = ['leave_request_id']
     ordering_fields = ['created_at', 'started_at']
     ordering = ['-created_at']
     admin_forbidden_message = "Forbidden: Deletion is restricted to Administrators."
