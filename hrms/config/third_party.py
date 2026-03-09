@@ -5,6 +5,7 @@ THIRD_PARTY_APPS = [
     'django_filters',              # Advanced filtering
     'drf_spectacular',             # For API Schema and Docs
     'phonenumber_field',           # Standardized phone numbers
+    'rest_framework_simplejwt.token_blacklist', # For blacklisting tokens (Logout)
 ]
 
 SPECTACULAR_CONFIG = {
@@ -13,7 +14,8 @@ SPECTACULAR_CONFIG = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'ENUM_NAME_OVERRIDES': {
-        'PayrollStatus': 'apps.payroll.models.PayrollStatus',
-        'LeaveRequestStatus': 'apps.leaves.models.LeaveRequestStatus',
+        'LeaveRequestStatus': 'apps.leaves.constants.LeaveRequestStatus',
+        'PayrollStatus': 'apps.payroll.constants.PayrollStatus',
+        'AIOperationLogStatus': 'apps.audit.constants.AIOperationLogStatus',
     },
 }

@@ -20,7 +20,7 @@ class DepartmentBasicSerializer(BaseSerializer):
     """
     class Meta:
         model = Department
-        fields = ['id', 'name', 'description']
+        fields = ['department_id', 'name', 'description']
         read_only_fields = fields  # All fields are read-only for nested display
 
 class EmployeeBasicSerializer(BaseSerializer):
@@ -56,6 +56,7 @@ class EmployeeSerializer(BaseSerializer):
     user_email = serializers.EmailField(write_only=True, required=True)
     user_password = serializers.CharField(write_only=True, style={'input_type': 'password'}, required=True)
     user_mobile_number = serializers.CharField(write_only=True, required=False)
+    user_bio = serializers.CharField(write_only=True, required=False)
 
     # --- RELATIONS (Input) ---
     department_id = serializers.PrimaryKeyRelatedField(
@@ -79,7 +80,7 @@ class EmployeeSerializer(BaseSerializer):
             'employee_id',
             
             # User Write Fields
-            'user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number',
+            'user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number', 'user_bio',
             
             # User Read Fields
             'first_name', 'last_name', 'email', 'mobile_number',
@@ -103,6 +104,7 @@ class EmployeeSerializer(BaseSerializer):
         u_email = validated_data.pop('user_email')
         u_password = validated_data.pop('user_password')
         u_phone = validated_data.pop('user_mobile_number', '')
+        u_bio = validated_data.pop('user_bio', '')
 
         # Create User
         user = User.objects.create_user(
@@ -111,7 +113,8 @@ class EmployeeSerializer(BaseSerializer):
             password=u_password,
             first_name=u_fname, 
             last_name=u_lname, 
-            phone_number=u_phone
+            phone_number=u_phone,
+            bio=u_bio
         )
         logger.info(f"Identity record created for new employee | User ID: {user.id}")
 
@@ -132,7 +135,7 @@ class EmployeeSerializer(BaseSerializer):
         :return: The updated Employee object
         :rtype: Employee
         """
-        user_fields = ['user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number']
+        user_fields = ['user_first_name', 'user_last_name', 'user_email', 'user_password', 'user_mobile_number', 'user_bio']
         
         if any(field in validated_data for field in user_fields):
             user = instance.user
@@ -143,6 +146,7 @@ class EmployeeSerializer(BaseSerializer):
                 user.email = new_email
                 user.username = new_email 
             if 'user_mobile_number' in validated_data: user.phone_number = validated_data.pop('user_mobile_number')
+            if 'user_bio' in validated_data: user.bio = validated_data.pop('user_bio')
             if 'user_password' in validated_data:
                 pwd = validated_data.pop('user_password')
                 if pwd: user.set_password(pwd)
