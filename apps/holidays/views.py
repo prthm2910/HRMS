@@ -5,8 +5,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
-from apps.base.views import DeleteMixin, AdminWriteViewSet
+from apps.base.views import DeleteMixin, AdminWriteFilterViewSet
 from apps.holidays.models import Holiday, HolidayExtractionStatus
+from apps.holidays.filters import HolidayFilter
 from apps.holidays.serializers import (
     HolidaySerializer,
     HolidayListSerializer,
@@ -15,7 +16,7 @@ from apps.holidays.serializers import (
 
 logger = logging.getLogger(__name__)
 
-class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
+class HolidayViewSet(DeleteMixin, AdminWriteFilterViewSet):
     """
     ViewSet for managing holidays.
     
@@ -34,32 +35,24 @@ class HolidayViewSet(DeleteMixin, AdminWriteViewSet):
     """
     
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    
+    queryset = Holiday.objects.all().order_by('holiday_date')
+    serializer_class = HolidaySerializer
+    filterset_class = HolidayFilter
+    search_fields = ['name', 'description']
+    ordering_fields = ['holiday_date', 'name']
+
     def get_queryset(self):
         """
         Return active holidays only for regular users.
         Admin can see all holidays including deleted ones.
         """
-        queryset = Holiday.objects.all()
+        queryset = super().get_queryset()
         
         # Regular users only see active, non-deleted holidays
         if not (self.request.user.is_staff or self.request.user.is_superuser):
             queryset = queryset.filter(is_active=True, is_deleted=False)
         
-        # Optional filtering by date range
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        region = self.request.query_params.get('region')
-        
-        # Filter by date range
-        if start_date:
-            queryset = queryset.filter(holiday_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(holiday_date__lte=end_date)
-        if region:
-            queryset = queryset.filter(region=region)
-        
-        return queryset.order_by('holiday_date')
+        return queryset
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""
