@@ -67,7 +67,7 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
         
         # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
         queryset = LeaveRequest.objects.filter(employee=employee_profile).select_related('employee__user', 'employee__department')
-        logger.debug(f"MyLeaveRequestViewSet: Found {queryset.count()} requests for employee {employee_profile.employee_id}")
+        logger.debug(f"MyLeaveRequestViewSet: Fetching requests for employee {employee_profile.employee_id}")
         
         # Existing status filter
         status_filter = self.request.query_params.get('status')
@@ -122,7 +122,7 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
                 return LeaveRequest.objects.none()
             # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
             queryset = LeaveRequest.objects.filter(employee__manager=employee_profile).select_related('employee__user', 'employee__department')
-            logger.debug(f"SubordinateLeaveRequestViewSet: Found {queryset.count()} requests for manager {employee_profile.employee_id}")
+            logger.debug(f"SubordinateLeaveRequestViewSet: Fetching requests for manager {employee_profile.employee_id}")
         
         status_filter = self.request.query_params.get('status', 'pending')
         if status_filter.lower() != 'all':
