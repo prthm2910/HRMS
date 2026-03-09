@@ -3,7 +3,6 @@ Constants for the projects app.
 Contains all enums used in project models.
 """
 
-from enum import Enum
 from apps.base.constants import BaseEnum
 
 

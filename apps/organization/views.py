@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from apps.base.views import (
     AdminWriteViewSet, 
+    AdminWriteFullViewSet,
     DeleteMixin, 
     SuperadminRoleViewSet,
     SuperadminFullViewSet
@@ -38,7 +39,7 @@ class HODViewSet(DeleteMixin, SuperadminFullViewSet):
         return self.queryset.filter(employee=employee_profile)
 
 @extend_schema(tags=['Departments'])
-class DepartmentViewSet(DeleteMixin, AdminWriteViewSet):
+class DepartmentViewSet(DeleteMixin, AdminWriteFullViewSet):
     """
     Department Management.
     Access: Anyone authenticated can View. Only Admins can Create/Update/Delete.
@@ -47,6 +48,13 @@ class DepartmentViewSet(DeleteMixin, AdminWriteViewSet):
     """
     queryset = Department.objects.filter(is_deleted=False).order_by('name')
     serializer_class = DepartmentSerializer
+    filterset_fields = ['is_active']
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_at']
+
+    def get_standard_user_queryset(self, employee_profile):
+        """Anyone authenticated can view departments."""
+        return self.queryset
 
 
 @extend_schema(
@@ -74,7 +82,7 @@ class DepartmentViewSet(DeleteMixin, AdminWriteViewSet):
         ),
     ]
 )
-class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
+class EmployeeViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     Employee Management.
     Access:
@@ -87,6 +95,10 @@ class EmployeeViewSet(DeleteMixin, SuperadminRoleViewSet):
     """
     queryset = Employee.objects.filter(is_deleted=False)
     serializer_class = EmployeeSerializer
+    filterset_fields = ['department', 'manager', 'employment_type', 'is_active']
+    search_fields = ['user__first_name', 'user__last_name', 'user__email', 'employee_id']
+    ordering_fields = ['joined_at', 'created_at']
+    ordering = ['-created_at']
     admin_forbidden_message = "Forbidden: Only Administrators have permission to manage employee profiles."
 
     def get_admin_queryset(self):

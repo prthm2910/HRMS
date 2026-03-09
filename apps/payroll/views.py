@@ -3,14 +3,11 @@ import logging
 from rest_framework import status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import OrderingFilter
 
 from apps.base.views import (
     DeleteMixin,
     SuperadminViewSet,
-    BaseReadOnlyAuthenticatedViewSet,
-    SuperadminFilterViewSet,
+    BaseReadOnlyFilteredViewSet,
     SuperadminFullViewSet
 )
 from apps.payroll.models import (
@@ -37,7 +34,7 @@ from apps.payroll.serializers import (
 logger = logging.getLogger(__name__)
 
 @extend_schema(tags=['Salary Component'])
-class SalaryComponentViewSet(DeleteMixin, SuperadminFilterViewSet):
+class SalaryComponentViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing salary components (earnings, deductions, bonuses).
     - Read: All authenticated users
@@ -53,7 +50,7 @@ class SalaryComponentViewSet(DeleteMixin, SuperadminFilterViewSet):
 
 
 @extend_schema(tags=['Employee Salary Structure'])
-class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFilterViewSet):
+class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing employee salary structures.
     - Read: All authenticated users
@@ -70,7 +67,7 @@ class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFilterViewSet):
 
 
 @extend_schema(tags=['Tax Rule'])
-class TaxRuleViewSet(DeleteMixin, SuperadminFilterViewSet):
+class TaxRuleViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing tax rules and slabs.
     - Read: All authenticated users
@@ -86,7 +83,7 @@ class TaxRuleViewSet(DeleteMixin, SuperadminFilterViewSet):
 
 
 @extend_schema(tags=['Payroll Run'])
-class PayrollRunViewSet(DeleteMixin, SuperadminFilterViewSet):
+class PayrollRunViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing payroll runs.
     - Read: All authenticated users
@@ -294,14 +291,12 @@ class PayslipViewSet(DeleteMixin, SuperadminFullViewSet):
 
 
 @extend_schema(tags=['Payslip Component'])
-class PayslipComponentViewSet(BaseReadOnlyAuthenticatedViewSet):
+class PayslipComponentViewSet(BaseReadOnlyFilteredViewSet):
     """
     Read-only ViewSet for payslip components.
-    Uses BaseReadOnlyAuthenticatedViewSet for authenticated read-only access.
     """
     queryset = PayslipComponent.objects.filter(is_deleted=False)
     serializer_class = PayslipComponentSerializer
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['payslip', 'component_type']
     ordering_fields = ['component_type', 'amount']
     ordering = ['component_type', 'component_name']

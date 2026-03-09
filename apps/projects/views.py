@@ -1,4 +1,3 @@
-from rest_framework import filters 
 import logging
 from drf_spectacular.utils import extend_schema
 from apps.base.views import RoleFullViewSet, DeleteMixin
