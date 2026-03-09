@@ -7,12 +7,15 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
 from apps.base.views import (
     BaseReadOnlyAuthenticatedViewSet,
+    BaseReadOnlyFilteredViewSet,
     SuperadminRoleViewSet,
     RoleReadOnlyViewSet,
     BaseCreateOnlyAuthenticatedViewSet,
-    DeleteMixin
+    DeleteMixin,
+    SuperadminFullViewSet
 )
 from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType, HalfDayPeriod
+from apps.leaves.filters import LeaveRequestFilter
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -44,13 +47,17 @@ class LeaveBalanceViewSet(RoleReadOnlyViewSet):
 
 
 @extend_schema(tags=['My Leave Requests'])
-class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
+class MyLeaveRequestViewSet(BaseReadOnlyFilteredViewSet):
     """
     View for employees to see their own leave requests.
     Returns all leave requests created by the authenticated user.
     """
     serializer_class = LeaveRequestSerializer
     queryset = LeaveRequest.objects.none()  # Hint for spectacular
+    filterset_class = LeaveRequestFilter
+    search_fields = ['reason', 'leave_request_id']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         user = self.request.user
@@ -65,46 +72,23 @@ class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
             logger.warning(f"MyLeaveRequestViewSet: No employee profile found for user {user}")
             return LeaveRequest.objects.none()
         
-        # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
-        queryset = LeaveRequest.objects.filter(employee=employee_profile).select_related('employee__user', 'employee__department')
-        logger.debug(f"MyLeaveRequestViewSet: Fetching requests for employee {employee_profile.employee_id}")
-        
-        # Existing status filter
-        status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter.upper() in dict(LeaveRequestStatus.choices()):
-            queryset = queryset.filter(status=status_filter.upper())
-        
-        # NEW: Month filter
-        month = self.request.query_params.get('month')
-        if month:
-            try:
-                queryset = queryset.filter(started_at__month=int(month))
-            except ValueError:
-                pass  # Invalid month, ignore filter
-        
-        # NEW: Year filter
-        year = self.request.query_params.get('year')
-        if year:
-            try:
-                queryset = queryset.filter(started_at__year=int(year))
-            except ValueError:
-                pass  # Invalid year, ignore filter
-        
-        # NEW: Leave type filter
-        leave_type = self.request.query_params.get('leave_type')
-        if leave_type and leave_type.upper() in dict(LeaveType.choices()):
-            queryset = queryset.filter(leave_type=leave_type.upper())
-        
-        return queryset.order_by('-created_at')
+        # Optimization: select_related prevents N+1 queries
+        return LeaveRequest.objects.filter(
+            employee=employee_profile
+        ).select_related('employee__user', 'employee__department')
 
 
 @extend_schema(tags=['Subordinate Leave Requests'])
-class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
+class SubordinateLeaveRequestViewSet(BaseReadOnlyFilteredViewSet):
     """
     View for managers to see leave requests from their subordinates.
     """
     serializer_class = LeaveRequestSerializer
     queryset = LeaveRequest.objects.none()  # Hint for spectacular
+    filterset_class = LeaveRequestFilter
+    search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id', 'reason']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         user = self.request.user
@@ -120,20 +104,14 @@ class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
             if not employee_profile:
                 logger.warning(f"SubordinateLeaveRequestViewSet: No employee profile found for user {user}")
                 return LeaveRequest.objects.none()
-            # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
-            queryset = LeaveRequest.objects.filter(employee__manager=employee_profile).select_related('employee__user', 'employee__department')
-            logger.debug(f"SubordinateLeaveRequestViewSet: Fetching requests for manager {employee_profile.employee_id}")
+            
+            queryset = LeaveRequest.objects.filter(employee__manager=employee_profile)
         
-        status_filter = self.request.query_params.get('status', 'pending')
-        if status_filter.lower() != 'all':
-            if status_filter.upper() in dict(LeaveRequestStatus.choices()):
-                queryset = queryset.filter(status=status_filter.upper())
-        
-        return queryset.order_by('-created_at')
+        return queryset.select_related('employee__user', 'employee__department')
 
 
 @extend_schema(tags=['Leave Requests'])
-class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
+class LeaveApplyViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
@@ -142,6 +120,10 @@ class LeaveApplyViewSet(DeleteMixin, SuperadminRoleViewSet):
     """
     queryset = LeaveRequest.objects.all()
     serializer_class = LeaveRequestSerializer
+    filterset_class = LeaveRequestFilter
+    search_fields = ['reason', 'leave_request_id']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
     admin_forbidden_message = "Forbidden: Deletion is restricted to Administrators."
 
     def get_admin_queryset(self):
