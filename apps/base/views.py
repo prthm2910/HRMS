@@ -2,6 +2,8 @@ from rest_framework import viewsets, permissions, mixins
 from apps.base.utils import get_employee_profile
 from apps.base.permissions import IsAdminUserOrReadOnly, IsAdminWriteOnly
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,8 +75,6 @@ class BaseFilteredViewSet(BaseAuthenticatedViewSet):
     Use this when you need filtering, search, or ordering in your viewset.
     Override filter_backends in subclass if you need a different combination.
     """
-    from django_filters.rest_framework import DjangoFilterBackend
-    from rest_framework.filters import SearchFilter, OrderingFilter
     
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 
@@ -98,8 +98,6 @@ class BaseReadOnlyFilteredViewSet(BaseReadOnlyAuthenticatedViewSet):
     """
     Base read-only viewset with authentication AND filtering/search/ordering.
     """
-    from django_filters.rest_framework import DjangoFilterBackend
-    from rest_framework.filters import SearchFilter, OrderingFilter
     
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 
@@ -124,8 +122,6 @@ class BaseReadOnlyAdminFilteredViewSet(BaseReadOnlyAdminViewSet):
     """
     Base read-only viewset requiring admin privileges WITH filtering.
     """
-    from django_filters.rest_framework import DjangoFilterBackend
-    from rest_framework.filters import SearchFilter, OrderingFilter
     
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
 
