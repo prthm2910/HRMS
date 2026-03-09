@@ -1,11 +1,11 @@
 import logging
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
-from apps.base.views import DeleteMixin, AdminWriteFilterViewSet
+from apps.base.views import DeleteMixin, AdminWriteFullViewSet
 from apps.holidays.models import Holiday, HolidayExtractionStatus
 from apps.holidays.filters import HolidayFilter
 from apps.holidays.serializers import (
@@ -16,7 +16,7 @@ from apps.holidays.serializers import (
 
 logger = logging.getLogger(__name__)
 
-class HolidayViewSet(DeleteMixin, AdminWriteFilterViewSet):
+class HolidayViewSet(DeleteMixin, AdminWriteFullViewSet):
     """
     ViewSet for managing holidays.
     
@@ -41,18 +41,11 @@ class HolidayViewSet(DeleteMixin, AdminWriteFilterViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['holiday_date', 'name']
 
-    def get_queryset(self):
+    def get_standard_user_queryset(self, employee_profile):
         """
         Return active holidays only for regular users.
-        Admin can see all holidays including deleted ones.
         """
-        queryset = super().get_queryset()
-        
-        # Regular users only see active, non-deleted holidays
-        if not (self.request.user.is_staff or self.request.user.is_superuser):
-            queryset = queryset.filter(is_active=True, is_deleted=False)
-        
-        return queryset
+        return self.queryset.filter(is_active=True, is_deleted=False)
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""

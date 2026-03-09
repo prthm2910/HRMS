@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from apps.base.views import (
     AdminWriteViewSet, 
-    AdminWriteFilterViewSet,
+    AdminWriteFullViewSet,
     DeleteMixin, 
     SuperadminRoleViewSet,
     SuperadminFullViewSet
@@ -39,7 +39,7 @@ class HODViewSet(DeleteMixin, SuperadminFullViewSet):
         return self.queryset.filter(employee=employee_profile)
 
 @extend_schema(tags=['Departments'])
-class DepartmentViewSet(DeleteMixin, AdminWriteFilterViewSet):
+class DepartmentViewSet(DeleteMixin, AdminWriteFullViewSet):
     """
     Department Management.
     Access: Anyone authenticated can View. Only Admins can Create/Update/Delete.
@@ -51,6 +51,10 @@ class DepartmentViewSet(DeleteMixin, AdminWriteFilterViewSet):
     filterset_fields = ['is_active']
     search_fields = ['name']
     ordering_fields = ['name', 'created_at']
+
+    def get_standard_user_queryset(self, employee_profile):
+        """Anyone authenticated can view departments."""
+        return self.queryset
 
 
 @extend_schema(
