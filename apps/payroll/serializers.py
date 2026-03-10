@@ -26,7 +26,6 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalaryComponent
         fields = [
-            'id',
             'code',
             'salary_component_id',
             'name',
@@ -37,7 +36,7 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'salary_component_id', 'created_at', 'updated_at']
+        read_only_fields = ['salary_component_id', 'created_at', 'updated_at']
 
 
 class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
@@ -52,7 +51,6 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeSalaryStructure
         fields = [
-            'id',
             'employee_salary_structure_id',
             'employee',
             'employee_details',
@@ -64,7 +62,7 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'employee_salary_structure_id', 'created_at', 'updated_at']
+        read_only_fields = ['employee_salary_structure_id', 'created_at', 'updated_at']
     
     def create(self, validated_data):
         """
@@ -104,7 +102,6 @@ class TaxRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaxRule
         fields = [
-            'id',
             'code',
             'tax_rule_id',
             'name',
@@ -116,7 +113,7 @@ class TaxRuleSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'tax_rule_id', 'created_at', 'updated_at']
+        read_only_fields = ['tax_rule_id', 'created_at', 'updated_at']
 
 
 class PayrollRunSerializer(serializers.ModelSerializer):
@@ -131,7 +128,6 @@ class PayrollRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayrollRun
         fields = [
-            'id',
             'code',
             'payroll_run_id',
             'month',
@@ -148,7 +144,6 @@ class PayrollRunSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
         read_only_fields = [
-            'id',
             'payroll_run_id',
             'processed_at',
             'processed_by',
@@ -169,13 +164,12 @@ class PayslipComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayslipComponent
         fields = [
-            'id',
             'payslip_component_id',
             'component_name',
             'component_type',
             'amount'
         ]
-        read_only_fields = ['id', 'payslip_component_id']
+        read_only_fields = ['payslip_component_id']
 
 
 class PayslipSerializer(serializers.ModelSerializer):
@@ -189,7 +183,6 @@ class PayslipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payslip
         fields = [
-            'id',
             'payslip_id',
             'payroll_run',
             'payroll_run_code',
@@ -209,7 +202,6 @@ class PayslipSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
         read_only_fields = [
-            'id',
             'payslip_id',
             'pdf_file',
             'email_sent_at',
@@ -253,7 +245,6 @@ class PayrollAutomationConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayrollAutomationConfig
         fields = [
-            'id',
             'payroll_automation_config_id',
             'is_enabled',
             'run_day',
@@ -261,4 +252,4 @@ class PayrollAutomationConfigSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'payroll_automation_config_id', 'created_at', 'updated_at']
+        read_only_fields = ['payroll_automation_config_id', 'created_at', 'updated_at']
