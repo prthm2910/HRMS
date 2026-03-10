@@ -3,7 +3,6 @@ Constants for the leaves app.
 Contains all enums used in leave models.
 """
 
-from enum import Enum
 from apps.base.constants import BaseEnum
 
 

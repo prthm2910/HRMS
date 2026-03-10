@@ -3,7 +3,6 @@ Constants for the payroll app.
 Contains all enums used in payroll models.
 """
 
-from enum import Enum
 from apps.base.constants import BaseEnum
 
 
