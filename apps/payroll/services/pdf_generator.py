@@ -1,191 +1,425 @@
 """
-Hybrid PDF Generation Service for Payslips
-Combines WeasyPrint (HTML/CSS layout) + ReportLab (security enhancements)
+PDF Generation Service for Payslips
 """
 
 import logging
 import qrcode
 from io import BytesIO
 from datetime import datetime
-from django.template.loader import render_to_string
+
 from django.conf import settings
-from weasyprint import HTML, CSS
-from reportlab.pdfgen import canvas
+
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from PyPDF2 import PdfReader, PdfWriter
-
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether
+)
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
 
 logger = logging.getLogger(__name__)
 
 
-class HybridPDFGenerator:
+# ── Colour palette (matches HTML template) ─────────────────────────────────
+DARK_BLUE   = colors.HexColor('#2c3e50')
+MID_BLUE    = colors.HexColor('#34495e')
+ACCENT_BLUE = colors.HexColor('#3498db')
+LIGHT_GRAY  = colors.HexColor('#ecf0f1')
+ROW_ALT     = colors.HexColor('#f9f9f9')
+SUMMARY_BG  = colors.HexColor('#e8f4f8')
+NET_BG      = colors.HexColor('#d5f4e6')
+NET_GREEN   = colors.HexColor('#27ae60')
+NOTE_BG     = colors.HexColor('#fff3cd')
+NOTE_BORDER = colors.HexColor('#ffc107')
+FOOTER_GRAY = colors.HexColor('#666666')
+WHITE       = colors.white
+
+
+# ── Styles ──────────────────────────────────────────────────────────────────
+def _build_styles():
+    base = getSampleStyleSheet()
+    return {
+        'company_name': ParagraphStyle(
+            'CompanyName',
+            fontSize=20, fontName='Helvetica-Bold',
+            textColor=DARK_BLUE, alignment=TA_CENTER, spaceAfter=4,
+        ),
+        'company_address': ParagraphStyle(
+            'CompanyAddress',
+            fontSize=8, fontName='Helvetica',
+            textColor=FOOTER_GRAY, alignment=TA_CENTER,
+        ),
+        'title': ParagraphStyle(
+            'Title',
+            fontSize=15, fontName='Helvetica-Bold',
+            textColor=MID_BLUE, alignment=TA_CENTER,
+            spaceBefore=8, spaceAfter=10,
+        ),
+        'section': ParagraphStyle(
+            'Section',
+            fontSize=10, fontName='Helvetica-Bold',
+            textColor=DARK_BLUE, spaceBefore=10, spaceAfter=4,
+        ),
+        'note': ParagraphStyle(
+            'Note',
+            fontSize=8, fontName='Helvetica',
+            textColor=colors.HexColor('#856404'),
+            spaceBefore=8, spaceAfter=4,
+        ),
+        'footer': ParagraphStyle(
+            'Footer',
+            fontSize=7, fontName='Helvetica',
+            textColor=FOOTER_GRAY, alignment=TA_CENTER, spaceAfter=2,
+        ),
+        'label': ParagraphStyle(
+            'Label',
+            fontSize=9, fontName='Helvetica-Bold',
+            textColor=colors.black,
+        ),
+        'value': ParagraphStyle(
+            'Value',
+            fontSize=9, fontName='Helvetica',
+            textColor=colors.black,
+        ),
+    }
+
+
+# ── Canvas callback for watermark, QR, page numbers ─────────────────────────
+class _PageDecorator:
+    """Passed as onFirstPage / onLaterPages to SimpleDocTemplate."""
+
+    def __init__(self, payslip):
+        self.payslip = payslip
+        self._qr_image = None  # generated once, reused
+
+    def _get_qr(self):
+        if self._qr_image is None:
+            qr_data = f"PAYSLIP:{self.payslip.payslip_id}:{self.payslip.employee.employee_id}"
+            qr = qrcode.QRCode(version=1,
+                               error_correction=qrcode.constants.ERROR_CORRECT_L,
+                               box_size=8, border=2)
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            self._qr_image = buf
+        else:
+            self._qr_image.seek(0)
+        return self._qr_image
+
+    def __call__(self, canv, doc):
+        width, height = A4
+        canv.saveState()
+
+        # 1. Watermark
+        canv.setFillColorRGB(0.85, 0.85, 0.85, alpha=0.25)
+        canv.setFont("Helvetica-Bold", 55)
+        canv.translate(width / 2, height / 2)
+        canv.rotate(45)
+        canv.drawCentredString(0, 0, "CONFIDENTIAL")
+        canv.restoreState()
+
+        canv.saveState()
+
+        # 2. QR code (first page only)
+        if doc.page == 1:
+            try:
+                from reportlab.lib.utils import ImageReader
+                qr_buf = self._get_qr()
+                qr_size = 30 * mm
+                qr_x = width - doc.rightMargin - qr_size
+                qr_y = doc.bottomMargin - qr_size - 2 * mm
+                canv.drawImage(ImageReader(qr_buf), qr_x, qr_y,
+                               width=qr_size, height=qr_size, mask='auto')
+                canv.setFont("Helvetica", 6)
+                canv.setFillColorRGB(0.3, 0.3, 0.3)
+                canv.drawCentredString(qr_x + qr_size / 2, qr_y - 4 * mm, "Scan to verify")
+            except Exception:
+                logger.warning("QR code rendering failed", exc_info=True)
+
+        # 3. Page number
+        canv.setFont("Helvetica", 8)
+        canv.setFillColorRGB(0.5, 0.5, 0.5)
+        canv.drawRightString(width - doc.rightMargin,
+                             doc.bottomMargin - 8 * mm,
+                             f"Page {doc.page}")
+
+        # 4. Timestamp (bottom left)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        canv.setFont("Helvetica", 7)
+        canv.drawString(doc.leftMargin,
+                        doc.bottomMargin - 8 * mm,
+                        f"Generated: {timestamp}")
+
+        canv.restoreState()
+
+
+# ── Info grid (employee details) ─────────────────────────────────────────────
+def _info_table(payslip, month_name, styles):
+    employee = payslip.employee
+    payroll_run = payslip.payroll_run
+
+    try:
+        dept = employee.department.name if employee.department else '—'
+    except Exception:
+        dept = '—'
+
+    payment_date = (
+        payroll_run.processed_at.strftime('%d %b %Y')
+        if payroll_run.processed_at else '—'
+    )
+
+    rows = [
+        ('Employee Name',  employee.user.get_full_name() or '—'),
+        ('Employee ID',    employee.employee_id or '—'),
+        ('Department',     dept),
+        ('Designation',    getattr(employee, 'designation', '—') or '—'),
+        ('Pay Period',     f"{month_name} {payslip.year}"),
+        ('Payment Date',   payment_date),
+    ]
+
+    table_data = [
+        [
+            Paragraph(label, styles['label']),
+            Paragraph(value, styles['value']),
+        ]
+        for label, value in rows
+    ]
+
+    col_w = [55 * mm, 105 * mm]
+    t = Table(table_data, colWidths=col_w)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), LIGHT_GRAY),
+        ('ROWBACKGROUNDS', (1, 0), (1, -1), [WHITE, ROW_ALT]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+        ('PADDING', (0, 0), (-1, -1), 5),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    return t
+
+
+# ── Generic salary component table ───────────────────────────────────────────
+def _salary_table(components, gross_label=None, gross_amount=None,
+                  total_label=None, total_amount=None):
+    header = [
+        Paragraph('<b>Component</b>', ParagraphStyle(
+            'TH', fontSize=9, fontName='Helvetica-Bold', textColor=WHITE)),
+        Paragraph('<b>Amount (₹)</b>', ParagraphStyle(
+            'THR', fontSize=9, fontName='Helvetica-Bold',
+            textColor=WHITE, alignment=TA_RIGHT)),
+    ]
+    data = [header]
+
+    for i, comp in enumerate(components):
+        data.append([
+            Paragraph(str(comp.component_name), ParagraphStyle(
+                'TD', fontSize=9, fontName='Helvetica')),
+            Paragraph(f"{comp.amount:,.2f}", ParagraphStyle(
+                'TDR', fontSize=9, fontName='Courier',
+                alignment=TA_RIGHT)),
+        ])
+
+    # Summary row (Gross / Total)
+    if gross_label:
+        data.append([
+            Paragraph(f'<b>{gross_label}</b>', ParagraphStyle(
+                'SR', fontSize=9, fontName='Helvetica-Bold')),
+            Paragraph(f'<b>{gross_amount:,.2f}</b>', ParagraphStyle(
+                'SRR', fontSize=9, fontName='Courier-Bold',
+                alignment=TA_RIGHT)),
+        ])
+    if total_label:
+        data.append([
+            Paragraph(f'<b>{total_label}</b>', ParagraphStyle(
+                'SR', fontSize=9, fontName='Helvetica-Bold')),
+            Paragraph(f'<b>{total_amount:,.2f}</b>', ParagraphStyle(
+                'SRR', fontSize=9, fontName='Courier-Bold',
+                alignment=TA_RIGHT)),
+        ])
+
+    col_w = [120 * mm, 40 * mm]
+    t = Table(data, colWidths=col_w)
+
+    style = [
+        # Header row
+        ('BACKGROUND',   (0, 0), (-1, 0), MID_BLUE),
+        ('GRID',         (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+        ('PADDING',      (0, 0), (-1, -1), 6),
+        ('VALIGN',       (0, 0), (-1, -1), 'MIDDLE'),
+        # Alternating rows (skip header row 0)
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [WHITE, ROW_ALT]),
+    ]
+
+    # Colour summary/total row
+    if gross_label or total_label:
+        style += [
+            ('BACKGROUND',  (0, -1), (-1, -1), SUMMARY_BG),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [WHITE, ROW_ALT]),
+        ]
+
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _net_salary_table(net_salary):
+    data = [[
+        Paragraph('<b>NET SALARY</b>', ParagraphStyle(
+            'NS', fontSize=11, fontName='Helvetica-Bold', textColor=NET_GREEN)),
+        Paragraph(f'<b>₹ {net_salary:,.2f}</b>', ParagraphStyle(
+            'NSR', fontSize=11, fontName='Courier-Bold',
+            textColor=NET_GREEN, alignment=TA_RIGHT)),
+    ]]
+    col_w = [120 * mm, 40 * mm]
+    t = Table(data, colWidths=col_w)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NET_BG),
+        ('GRID',       (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+        ('PADDING',    (0, 0), (-1, -1), 8),
+        ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    return t
+
+
+# ── Main generator ────────────────────────────────────────────────────────────
+class PayslipPDFGenerator:
     """
-    Generates professional payslips using hybrid approach:
-    1. WeasyPrint: Base PDF from HTML/CSS template
-    2. ReportLab: Add watermark, QR code, security elements
-    3. PyPDF2: Merge both layers
+    Pure ReportLab payslip generator.
+    Produces a professional A4 PDF with:
+      - Company header
+      - Employee info grid
+      - Earnings / Bonuses / Deductions tables
+      - Net salary row
+      - Confidential watermark + QR code via canvas callbacks
     """
-    
+
     def __init__(self, payslip):
         self.payslip = payslip
         self.employee = payslip.employee
         self.payroll_run = payslip.payroll_run
-        
+
     def generate(self) -> bytes:
-        """
-        Generate complete payslip PDF
-        Returns: PDF as bytes
-        """
-        # Step 1: Generate base PDF with WeasyPrint
-        logger.debug(f"Executing Step 1: Base PDF generation (WeasyPrint) | Payslip ID: {self.payslip.payslip_id}")
-        base_pdf = self._generate_base_pdf()
-        
-        # Step 2: Add enhancements with ReportLab
-        logger.debug(f"Executing Step 2: Security enhancements (ReportLab) | Payslip ID: {self.payslip.payslip_id}")
-        enhanced_pdf = self._add_enhancements(base_pdf)
-        
-        logger.info(f"Hybrid PDF generation completed | Payslip ID: {self.payslip.payslip_id} | Employee ID: {self.employee.employee_id}")
-        return enhanced_pdf
-    
-    def _generate_base_pdf(self) -> bytes:
-        """Generate base PDF using WeasyPrint from HTML template"""
-        
         from apps.base.utils import get_month_name
-        
-        # Prepare context for template
-        context = {
-            'payslip': self.payslip,
-            'employee': self.employee,
-            'payroll_run': self.payroll_run,
-            'company_name': getattr(settings, 'COMPANY_NAME', 'Company Name'),
-            'company_address': getattr(settings, 'COMPANY_ADDRESS', ''),
-            'generated_date': datetime.now(),
-            'month_name': get_month_name(self.payslip.month),  # Add month name to context
-            
-            # Salary breakdown
-            'earnings': self.payslip.components.filter(
-                component_type='EARNING'
-            ).order_by('component_name'),
-            
-            'deductions': self.payslip.components.filter(
-                component_type='DEDUCTION'
-            ).order_by('component_name'),
-            
-            'bonuses': self.payslip.components.filter(
-                component_type='BONUS'
-            ).order_by('component_name'),
-        }
-        
-        # Render HTML template
-        html_string = render_to_string('payroll/payslip_template.html', context)
-        
-        # Generate PDF with WeasyPrint
-        pdf_bytes = HTML(string=html_string).write_pdf()
-        
-        return pdf_bytes
-    
-    def _add_enhancements(self, base_pdf_bytes: bytes) -> bytes:
-        """Add watermark, QR code, and security elements using ReportLab"""
-        
-        # Read base PDF
-        base_pdf = PdfReader(BytesIO(base_pdf_bytes))
-        output_pdf = PdfWriter()
-        
-        # Process each page
-        for page_num, page in enumerate(base_pdf.pages):
-            # Create overlay with ReportLab
-            overlay_bytes = self._create_overlay(page_num)
-            overlay_pdf = PdfReader(BytesIO(overlay_bytes))
-            
-            # Merge overlay with original page
-            page.merge_page(overlay_pdf.pages[0])
-            output_pdf.add_page(page)
-        
-        # Write to bytes
-        output_stream = BytesIO()
-        output_pdf.write(output_stream)
-        output_stream.seek(0)
-        
-        return output_stream.getvalue()
-    
-    def _create_overlay(self, page_num: int) -> bytes:
-        """Create ReportLab overlay with watermark and QR code"""
-        
-        packet = BytesIO()
-        can = canvas.Canvas(packet, pagesize=A4)
-        width, height = A4
-        
-        # 1. Add watermark
-        can.saveState()
-        can.setFillColorRGB(0.85, 0.85, 0.85, alpha=0.3)
-        can.setFont("Helvetica-Bold", 60)
-        can.translate(width / 2, height / 2)
-        can.rotate(45)
-        can.drawCentredString(0, 0, "CONFIDENTIAL")
-        can.restoreState()
-        
-        # 2. Add QR code for verification (only on first page)
-        if page_num == 0:
-            qr_data = f"PAYSLIP:{self.payslip.payslip_id}:{self.employee.employee_id}"
-            qr_img = self._generate_qr_code(qr_data)
-            
-            # Position QR code at bottom right
-            qr_x = width - 60*mm
-            qr_y = 15*mm
-            can.drawInlineImage(qr_img, qr_x, qr_y, width=40*mm, height=40*mm)
-            
-            # Add QR code label
-            can.setFont("Helvetica", 8)
-            can.setFillColorRGB(0.3, 0.3, 0.3)
-            can.drawCentredString(qr_x + 20*mm, qr_y - 5*mm, "Scan to verify")
-        
-        # 3. Add page numbers
-        can.setFont("Helvetica", 9)
-        can.setFillColorRGB(0.5, 0.5, 0.5)
-        page_text = f"Page {page_num + 1}"
-        can.drawRightString(width - 20*mm, 10*mm, page_text)
-        
-        # 4. Add generation timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        can.setFont("Helvetica", 7)
-        can.drawString(20*mm, 10*mm, f"Generated: {timestamp}")
-        
-        can.save()
-        packet.seek(0)
-        
-        return packet.getvalue()
-    
-    def _generate_qr_code(self, data: str) -> BytesIO:
-        """Generate QR code image"""
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=2,
+
+        buf = BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm, rightMargin=20 * mm,
+            topMargin=20 * mm, bottomMargin=25 * mm,
         )
-        qr.add_data(data)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to BytesIO
-        img_bytes = BytesIO()
-        img.save(img_bytes, format='PNG')
-        img_bytes.seek(0)
-        
-        return img_bytes
+
+        styles = _build_styles()
+        decorator = _PageDecorator(self.payslip)
+        company_name = getattr(settings, 'COMPANY_NAME', 'Company Name')
+        company_address = getattr(settings, 'COMPANY_ADDRESS', '')
+        month_name = get_month_name(self.payslip.month)
+
+        # ── Fetch components ──────────────────────────────────────────────
+        earnings   = list(self.payslip.components.filter(
+            component_type='EARNING').order_by('component_name'))
+        deductions = list(self.payslip.components.filter(
+            component_type='DEDUCTION').order_by('component_name'))
+        bonuses    = list(self.payslip.components.filter(
+            component_type='BONUS').order_by('component_name'))
+
+        # ── Build story ───────────────────────────────────────────────────
+        story = []
+
+        # -- Header --
+        story.append(Paragraph(company_name, styles['company_name']))
+        if company_address:
+            story.append(Paragraph(company_address, styles['company_address']))
+        story.append(HRFlowable(width='100%', thickness=2,
+                                color=DARK_BLUE, spaceAfter=4))
+        story.append(Paragraph('PAYSLIP', styles['title']))
+
+        # -- Employee info --
+        story.append(_info_table(self.payslip, month_name, styles))
+        story.append(Spacer(1, 6 * mm))
+
+        # -- Earnings --
+        story.append(Paragraph('Earnings', styles['section']))
+        story.append(HRFlowable(width='100%', thickness=1.5,
+                                color=ACCENT_BLUE, spaceAfter=3))
+        story.append(_salary_table(
+            earnings,
+            gross_label='Gross Salary',
+            gross_amount=float(self.payslip.gross_salary),
+        ))
+        story.append(Spacer(1, 4 * mm))
+
+        # -- Bonuses (optional) --
+        if bonuses:
+            story.append(Paragraph('Bonuses', styles['section']))
+            story.append(HRFlowable(width='100%', thickness=1.5,
+                                    color=ACCENT_BLUE, spaceAfter=3))
+            story.append(_salary_table(bonuses))
+            story.append(Spacer(1, 4 * mm))
+
+        # -- Deductions --
+        story.append(Paragraph('Deductions', styles['section']))
+        story.append(HRFlowable(width='100%', thickness=1.5,
+                                color=ACCENT_BLUE, spaceAfter=3))
+        story.append(_salary_table(
+            deductions,
+            total_label='Total Deductions',
+            total_amount=float(self.payslip.total_deductions),
+        ))
+        story.append(Spacer(1, 4 * mm))
+
+        # -- Net salary --
+        story.append(_net_salary_table(float(self.payslip.net_salary)))
+        story.append(Spacer(1, 6 * mm))
+
+        # -- Note --
+        story.append(KeepTogether([
+            Paragraph(
+                '<b>Note:</b> This is a computer-generated payslip and does not '
+                'require a signature. Please verify the details and report any '
+                'discrepancies to the HR department within 7 days.',
+                styles['note'],
+            ),
+        ]))
+        story.append(Spacer(1, 6 * mm))
+
+        # -- Footer --
+        story.append(HRFlowable(width='100%', thickness=1.5,
+                                color=MID_BLUE, spaceAfter=4))
+        story.append(Paragraph(
+            f"{company_name} | Payroll Department", styles['footer']))
+        story.append(Paragraph(
+            "This document is confidential and intended solely for the use of "
+            "the individual to whom it is addressed.",
+            styles['footer'],
+        ))
+
+        # ── Build PDF ─────────────────────────────────────────────────────
+        doc.build(story, onFirstPage=decorator, onLaterPages=decorator)
+
+        logger.info(
+            f"ReportLab PDF generation completed | "
+            f"Payslip ID: {self.payslip.payslip_id} | "
+            f"Employee ID: {self.employee.employee_id}"
+        )
+
+        buf.seek(0)
+        return buf.getvalue()
 
 
-def generate_payslip_pdf(payslip):
+def generate_payslip_pdf(payslip) -> bytes:
     """
-    Main function to generate payslip PDF
-    
+    Public entry point — called from Payslip.generate_pdf().
+
     Args:
         payslip: Payslip model instance
-        
     Returns:
         bytes: PDF file content
     """
-    generator = HybridPDFGenerator(payslip)
+    generator = PayslipPDFGenerator(payslip)
     return generator.generate()
