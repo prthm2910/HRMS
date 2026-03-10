@@ -1,37 +1,39 @@
-from drf_spectacular.utils import extend_schema
 import logging
-from rest_framework import status, permissions
+
+from drf_spectacular.utils import extend_schema
+from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.base.views import (
-    DeleteMixin,
-    SuperadminViewSet,
     BaseReadOnlyFilteredViewSet,
-    SuperadminFullViewSet
+    DeleteMixin,
+    SuperadminFullViewSet,
+    SuperadminViewSet,
 )
 from apps.payroll.models import (
-    SalaryComponent,
     EmployeeSalaryStructure,
-    TaxRule,
+    PayrollAutomationConfig,
     PayrollRun,
     PayrollStatus,
     Payslip,
     PayslipComponent,
-    PayrollAutomationConfig
+    SalaryComponent,
+    TaxRule,
 )
 from apps.payroll.serializers import (
-    SalaryComponentSerializer,
     EmployeeSalaryStructureSerializer,
-    TaxRuleSerializer,
+    PayrollAutomationConfigSerializer,
     PayrollRunSerializer,
-    PayslipSerializer,
-    PayslipDetailSerializer,
     PayslipComponentSerializer,
-    PayrollAutomationConfigSerializer
+    PayslipDetailSerializer,
+    PayslipSerializer,
+    SalaryComponentSerializer,
+    TaxRuleSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
 
 @extend_schema(tags=['Salary Component'])
 class SalaryComponentViewSet(DeleteMixin, SuperadminFullViewSet):
@@ -50,11 +52,10 @@ class SalaryComponentViewSet(DeleteMixin, SuperadminFullViewSet):
 
 
 @extend_schema(tags=['Employee Salary Structure'])
-class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFullViewSet):
+class EmployeeSalaryStructureViewSet(BaseReadOnlyFilteredViewSet):
     """
-    ViewSet for managing employee salary structures.
-    - Read: All authenticated users
-    - Write: Admins only (via IsAdminWriteOnly)
+    Read-only ViewSet for employee salary structures (system-calculated).
+    No create/update/delete — amounts are auto-derived from SalaryComponent rules.
     """
     queryset = EmployeeSalaryStructure.objects.filter(is_deleted=False).select_related(
         'employee', 'salary_component'

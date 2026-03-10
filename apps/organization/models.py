@@ -68,7 +68,7 @@ class Employee(BaseModel):
     
     # Personal details
     born_at = models.DateTimeField(null=True, blank=True, help_text="Date and time of birth")
-    salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
+    salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Annual CTC (Cost to Company) in INR")
 
     _display_id_prefix = 'EMP'
     _display_id_field = 'employee_id'

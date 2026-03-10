@@ -1,20 +1,20 @@
 import logging
-from datetime import timedelta
-from django.utils import timezone
+
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+
+from apps.leaves.constants import LeaveRequestStatus, LeaveType
+from apps.organization.serializers import EmployeeSerializer
 from apps.payroll.models import (
-    SalaryComponent,
     EmployeeSalaryStructure,
-    TaxRule,
+    PayrollAutomationConfig,
     PayrollRun,
     Payslip,
     PayslipComponent,
-    PayrollAutomationConfig
+    SalaryComponent,
+    TaxRule,
 )
-from apps.organization.serializers import EmployeeSerializer
-from apps.leaves.constants import LeaveType, LeaveRequestStatus
-from drf_spectacular.utils import extend_schema_field
-from drf_spectacular.types import OpenApiTypes
 
 
 logger = logging.getLogger(__name__)
@@ -32,21 +32,19 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
             'component_type',
             'calculation_method',
             'is_taxable',
+            'is_basic_salary',
             'default_value',
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['salary_component_id', 'created_at', 'updated_at']
+        read_only_fields = ['salary_component_id', 'code', 'created_at', 'updated_at']
 
 
 class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
-    """Serializer for employee salary breakdown"""
+    """Read-only serializer for employee salary breakdown (system-calculated)"""
     
     employee_details = EmployeeSerializer(source='employee', read_only=True)
     component_details = SalaryComponentSerializer(source='salary_component', read_only=True)
-    
-    # Default effective_from_at to now if not provided
-    effective_from_at = serializers.DateTimeField(default=serializers.CreateOnlyDefault(timezone.now))
     
     class Meta:
         model = EmployeeSalaryStructure
@@ -62,38 +60,7 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['employee_salary_structure_id', 'created_at', 'updated_at']
-    
-    def create(self, validated_data):
-        """
-        Auto-close old salary structure when creating new one
-        for same employee + salary_component combination
-        """
-        
-        employee = validated_data['employee']
-        component = validated_data['salary_component']
-        new_effective_from = validated_data.get('effective_from_at')
-        
-        if not new_effective_from:
-            new_effective_from = timezone.now()
-            
-        # Find existing open structure for same employee+component
-        old_structure = EmployeeSalaryStructure.objects.filter(
-            employee=employee,
-            salary_component=component,
-            effective_to_at__isnull=True,
-            is_deleted=False
-        ).first()
-        
-        if old_structure and old_structure.effective_from_at < new_effective_from:
-            # Auto-close old structure (1 second before new structure starts)
-            old_structure.effective_to_at = new_effective_from - timedelta(seconds=1)
-            old_structure.save()
-            logger.info(f"Existing salary structure auto-closed | Structure ID: {old_structure.id} | Employee ID: {employee.employee_id}")
-        
-        # Create new structure
-        logger.debug(f"Creating new salary structure | Employee ID: {employee.employee_id} | Component: {component.name}")
-        return super().create(validated_data)
+        read_only_fields = '__all__'
 
 
 class TaxRuleSerializer(serializers.ModelSerializer):

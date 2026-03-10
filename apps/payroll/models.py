@@ -1,13 +1,15 @@
 import logging
-from django.db import models
+
 from django.conf import settings
-from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.base.models import BaseModel
-from apps.organization.models import Employee
-from apps.payroll.constants import ComponentType, CalculationMethod, PayrollStatus
-from django.utils.text import slugify
-from apps.base.utils import get_month_name
 from django.core.files.base import ContentFile
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.utils.text import slugify
+
+from apps.base.models import BaseModel
+from apps.base.utils import get_month_name
+from apps.organization.models import Employee
+from apps.payroll.constants import CalculationMethod, ComponentType, PayrollStatus
 from apps.payroll.services.pdf_generator import generate_payslip_pdf
 
 logger = logging.getLogger(__name__)
@@ -27,8 +29,8 @@ class SalaryComponent(BaseModel):
     
     # HRID identifier
     salary_component_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         help_text="Format: SCMXXXXXX"
@@ -46,10 +48,15 @@ class SalaryComponent(BaseModel):
         default=CalculationMethod.FIXED.value
     )
     is_taxable = models.BooleanField(default=True)
+    is_basic_salary = models.BooleanField(
+        default=False,
+        help_text="Mark as True for the Basic Salary component. Only one component should have this set."
+    )
     default_value = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(0)]
+        validators=[MinValueValidator(0)],
+        help_text="For FIXED: flat monthly amount in INR. For PERCENTAGE: percentage value (e.g., 50 for 50%)."
     )
     
     class Meta:
@@ -79,8 +86,8 @@ class EmployeeSalaryStructure(BaseModel):
     
     # Business identifier (exposed in APIs)
     employee_salary_structure_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         db_index=True,
@@ -101,13 +108,15 @@ class EmployeeSalaryStructure(BaseModel):
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(0)]
+        validators=[MinValueValidator(0)],
+        editable=False,
+        help_text="System-calculated. FIXED: flat value. PERCENTAGE: derived from CTC/Basic."
     )
     effective_from_at = models.DateTimeField(
         help_text="Date and time from which this salary structure is effective"
     )
     effective_to_at = models.DateTimeField(
-        null=True, 
+        null=True,
         blank=True,
         help_text="Date and time when this salary structure expires"
     )
@@ -135,8 +144,8 @@ class TaxRule(BaseModel):
     
     # HRID identifier
     tax_rule_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         help_text="Format: TAXXXXXXX"
@@ -200,8 +209,8 @@ class PayrollRun(BaseModel):
     
     # HRID identifier
     payroll_run_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         help_text="Format: PRNXXXXXX"
@@ -272,8 +281,8 @@ class Payslip(BaseModel):
     
     # Business identifier (exposed in APIs)
     payslip_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         db_index=True,
@@ -322,8 +331,8 @@ class Payslip(BaseModel):
     
     def generate_pdf(self):
         """
-        Generate PDF payslip using hybrid approach (WeasyPrint + ReportLab)
-        Saves the PDF to the pdf_file field
+        Generate PDF payslip using ReportLab.
+        Saves the PDF to the pdf_file field.
         """
         logger.info(f"Initiating PDF generation for payslip | ID: {self.payslip_id} | Employee: {self.employee.employee_id}")
         
@@ -337,7 +346,6 @@ class Payslip(BaseModel):
         return self.pdf_file
 
 
-
 class PayslipComponent(BaseModel):
     """Breakdown of each payslip"""
     
@@ -345,8 +353,8 @@ class PayslipComponent(BaseModel):
     
     # Business identifier (exposed in APIs)
     payslip_component_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         db_index=True,
@@ -379,8 +387,8 @@ class PayrollAutomationConfig(BaseModel):
     
     # Business identifier (exposed in APIs)
     payroll_automation_config_id = models.CharField(
-        max_length=20, 
-        unique=True, 
+        max_length=20,
+        unique=True,
         editable=False,
         null=True,
         db_index=True,

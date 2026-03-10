@@ -10,4 +10,5 @@ class PayrollConfig(AppConfig):
     verbose_name = 'Payroll & Compensation'
 
     def ready(self):
+        import apps.payroll.signals  # noqa: F401 — register signal handlers
         logger.info("Payroll application ready | Context: Compensation & Benefits")
