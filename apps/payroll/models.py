@@ -62,12 +62,8 @@ class SalaryComponent(BaseModel):
         if not self.code:
             self.code = slugify(self.name)
             
-            # Ensure uniqueness by appending number if needed
-            original_code = self.code
-            counter = 1
-            while SalaryComponent.objects.filter(code=self.code).exclude(pk=self.pk).exists():
-                self.code = f"{original_code}-{counter}"
-                counter += 1
+            if SalaryComponent.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                raise ValueError(f"Slug collision for salary component code '{self.code}'. Rename the component.")
             logger.debug(f"Auto-generated code for salary component | Code: {self.code}")
         
         super().save(*args, **kwargs)
@@ -182,12 +178,8 @@ class TaxRule(BaseModel):
             from django.utils.text import slugify
             self.code = slugify(self.name)
             
-            # Ensure uniqueness
-            original_code = self.code
-            counter = 1
-            while TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
-                self.code = f"{original_code}-{counter}"
-                counter += 1
+            if TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                raise ValueError(f"Slug collision for tax rule code '{self.code}'. Rename the tax rule.")
             logger.debug(f"Auto-generated code for tax rule | Code: {self.code}")
         
         super().save(*args, **kwargs)
@@ -266,12 +258,8 @@ class PayrollRun(BaseModel):
             month_name = get_month_name(self.month)
             self.code = slugify(f"pr-{month_name}-{self.year}")
             
-            # Ensure uniqueness by appending version number if needed
-            original_code = self.code
-            counter = 1
-            while PayrollRun.objects.filter(code=self.code).exclude(pk=self.pk).exists():
-                self.code = f"{original_code}-v{counter}"
-                counter += 1
+            if PayrollRun.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                raise ValueError(f"Slug collision for payroll run code '{self.code}'. This month/year run already exists.")
             logger.debug(f"Auto-generated code for payroll run | Code: {self.code}")
         
         super().save(*args, **kwargs)
