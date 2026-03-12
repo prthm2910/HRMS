@@ -16,6 +16,8 @@ SPECTACULAR_CONFIG = {
     'ENUM_NAME_OVERRIDES': {
         'LeaveRequestStatus': 'apps.leaves.constants.LeaveRequestStatus',
         'PayrollStatus': 'apps.payroll.constants.PayrollStatus',
-        'AIOperationLogStatus': 'apps.audit.constants.AIOperationLogStatus',
+        'AIOperationStatus': 'apps.audit.constants.AIOperationLogStatus',
+        'EmploymentType': 'apps.organization.constants.EmploymentType',
+        'LeaveType': 'apps.leaves.constants.LeaveType',
     },
 }
