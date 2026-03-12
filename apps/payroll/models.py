@@ -184,7 +184,6 @@ class TaxRule(BaseModel):
         # Auto-generate code from name if not provided
         is_new = self._state.adding
         if not self.code:
-            from django.utils.text import slugify
             self.code = slugify(self.name)
             
             if TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
