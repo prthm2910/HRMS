@@ -60,7 +60,15 @@ class EmployeeSalaryStructureSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = '__all__'
+        read_only_fields = [
+            'employee_salary_structure_id',
+            'employee',
+            'amount',
+            'effective_from_at',
+            'effective_to_at',
+            'created_at',
+            'updated_at'
+        ]
 
 
 class TaxRuleSerializer(serializers.ModelSerializer):
