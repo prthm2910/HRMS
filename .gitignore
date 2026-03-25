@@ -23,3 +23,7 @@ file_struct.txt
 
 # Documentation (local artifacts)
 docs/
+.code-review-graph
+.gemini/
+.agent/
+.planning/
