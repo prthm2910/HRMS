@@ -2,7 +2,6 @@ from django.contrib import admin
 from apps.payroll.models import (
     SalaryComponent,
     EmployeeSalaryStructure,
-    TaxRule,
     PayrollRun,
     Payslip,
     PayslipComponent,
@@ -12,8 +11,8 @@ from apps.payroll.models import (
 
 @admin.register(SalaryComponent)
 class SalaryComponentAdmin(admin.ModelAdmin):
-    list_display = ['salary_component_id', 'name', 'component_type', 'calculation_method', 'is_taxable', 'default_value', 'created_at']
-    list_filter = ['component_type', 'calculation_method', 'is_taxable']
+    list_display = ['salary_component_id', 'name', 'component_type', 'calculation_method', 'is_basic_salary', 'default_value', 'created_at']
+    list_filter = ['component_type', 'calculation_method']
     search_fields = ['name']
     ordering = ['component_type', 'name']
 
@@ -25,14 +24,6 @@ class EmployeeSalaryStructureAdmin(admin.ModelAdmin):
     search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id']
     raw_id_fields = ['employee', 'salary_component']
     date_hierarchy = 'effective_from_at'
-
-
-@admin.register(TaxRule)
-class TaxRuleAdmin(admin.ModelAdmin):
-    list_display = ['tax_rule_id', 'name', 'country', 'min_income', 'max_income', 'tax_percentage', 'is_active']
-    list_filter = ['country', 'is_active']
-    search_fields = ['name']
-    ordering = ['country', 'min_income']
 
 
 @admin.register(PayrollRun)

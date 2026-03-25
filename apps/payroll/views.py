@@ -19,7 +19,6 @@ from apps.payroll.models import (
     Payslip,
     PayslipComponent,
     SalaryComponent,
-    TaxRule,
 )
 from apps.payroll.serializers import (
     EmployeeSalaryStructureSerializer,
@@ -29,7 +28,7 @@ from apps.payroll.serializers import (
     PayslipDetailSerializer,
     PayslipSerializer,
     SalaryComponentSerializer,
-    TaxRuleSerializer,
+    SalaryCurationSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ class SalaryComponentViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     queryset = SalaryComponent.objects.filter(is_deleted=False)
     serializer_class = SalaryComponentSerializer
-    filterset_fields = ['component_type', 'calculation_method', 'is_taxable']
+    filterset_fields = ['component_type', 'calculation_method']
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'component_type', 'created_at']
     ordering = ['component_type', 'name']
@@ -52,10 +51,10 @@ class SalaryComponentViewSet(DeleteMixin, SuperadminFullViewSet):
 
 
 @extend_schema(tags=['Employee Salary Structure'])
-class EmployeeSalaryStructureViewSet(BaseReadOnlyFilteredViewSet):
+class EmployeeSalaryStructureViewSet(DeleteMixin, SuperadminFullViewSet):
     """
-    Read-only ViewSet for employee salary structures (system-calculated).
-    No create/update/delete — amounts are auto-derived from SalaryComponent rules.
+    ViewSet for employee salary structures.
+    HR can curated unique structures for each employee.
     """
     queryset = EmployeeSalaryStructure.objects.filter(is_deleted=False).select_related(
         'employee', 'salary_component'
@@ -66,21 +65,46 @@ class EmployeeSalaryStructureViewSet(BaseReadOnlyFilteredViewSet):
     ordering_fields = ['effective_from_at', 'amount', 'created_at']
     ordering = ['-effective_from_at']
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAdminUser])
+    def suggest(self, request):
+        """
+        Get suggested salary structure for an employee based on master rules.
+        Query params: ?employee=<employee_id>
+        """
+        from apps.payroll.services.salary_structure_service import SalaryStructureService
+        from apps.organization.models import Employee
+        
+        employee_id = request.query_params.get('employee')
+        if not employee_id:
+            return Response({'error': 'employee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            employee = Employee.objects.get(pk=employee_id, is_deleted=False)
+            suggestions = SalaryStructureService.get_suggested_structure(employee)
+            return Response(suggestions, status=status.HTTP_200_OK)
+        except (Employee.DoesNotExist, ValueError):
+            return Response({'error': 'Employee not found or invalid ID'}, status=status.HTTP_404_NOT_FOUND)
 
-@extend_schema(tags=['Tax Rule'])
-class TaxRuleViewSet(DeleteMixin, SuperadminFullViewSet):
-    """
-    ViewSet for managing tax rules and slabs.
-    - Read: All authenticated users
-    - Write: Admins only (via IsAdminWriteOnly)
-    """
-    queryset = TaxRule.objects.filter(is_deleted=False)
-    serializer_class = TaxRuleSerializer
-    filterset_fields = ['country', 'is_active']
-    search_fields = ['name', 'code']
-    ordering_fields = ['country', 'min_income', 'created_at']
-    ordering = ['country', 'min_income']
-    lookup_field = 'code'  # Allow lookup by code instead of ID
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def curate(self, request):
+        """
+        Bulk update/curate salary structure for an employee.
+        Payload: { "employee": "...", "components": [{"salary_component": ID, "amount": 5000}, ...] }
+        """
+        from apps.payroll.services.salary_structure_service import SalaryStructureService
+        
+        serializer = SalaryCurationSerializer(data=request.data)
+        if serializer.is_valid():
+            employee = serializer.validated_data['employee']
+            components = serializer.validated_data['components']
+            
+            try:
+                SalaryStructureService.update_employee_structure(employee, components)
+                return Response({'message': 'Structure curated successfully'}, status=status.HTTP_200_OK)
+            except ValueError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(tags=['Payroll Run'])
@@ -320,4 +344,3 @@ class PayrollAutomationConfigViewSet(SuperadminViewSet):
             defaults={'is_enabled': False}
         )
         return config
-
