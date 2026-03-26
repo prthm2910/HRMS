@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from apps.base.models import BaseModel
 from apps.holidays.constants import HolidayExtractionStatus
+from apps.base.utils import generate_unique_id
 from datetime import date
 import logging
 
@@ -118,7 +119,7 @@ class Holiday(BaseModel):
         # Generate recurring group ID if this is a new recurring holiday
         # Generate recurring group ID if this is a new recurring holiday
         if is_new and self.is_recurring and not self.recurring_group_id:
-            from apps.base.utils import generate_unique_id
+            
             self.recurring_group_id = generate_unique_id(self.__class__, 'recurring_group_id', prefix='RGP', length=6)
         
         # Save the current instance first
