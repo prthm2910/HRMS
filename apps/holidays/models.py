@@ -184,9 +184,7 @@ class Holiday(BaseModel):
             holiday_date__year__gt=date.today().year
         ).update(
             is_deleted=True,
-            is_active=False,
-            is_recurring=False,
-            recurring_group_id=None
+            is_active=False
         )
         
         # Clear recurring_group_id for all remaining holidays in the group
