@@ -156,6 +156,7 @@ class Holiday(BaseModel):
             if not exists:
                 holidays_to_create.append(
                     Holiday(
+                        holiday_id=generate_unique_id(self.__class__, 'holiday_id', prefix='HOL', length=6),
                         holiday_date=future_date,
                         name=self.name,
                         description=self.description,
