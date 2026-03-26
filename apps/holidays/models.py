@@ -180,7 +180,7 @@ class Holiday(BaseModel):
         # Delete all future holidays in this recurring group
         Holiday.objects.filter(
             recurring_group_id=self.recurring_group_id,
-            date__gt=date.today()
+            holiday_date__year__gt=date.today().year
         ).delete()
         
         # Clear recurring_group_id for all remaining holidays in the group
