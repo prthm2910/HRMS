@@ -181,7 +181,12 @@ class Holiday(BaseModel):
         Holiday.objects.filter(
             recurring_group_id=self.recurring_group_id,
             holiday_date__year__gt=date.today().year
-        ).delete()
+        ).update(
+            is_deleted=True,
+            is_active=False,
+            is_recurring=False,
+            recurring_group_id=None
+        )
         
         # Clear recurring_group_id for all remaining holidays in the group
         Holiday.objects.filter(
