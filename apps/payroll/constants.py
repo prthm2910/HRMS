@@ -11,6 +11,7 @@ class ComponentType(BaseEnum):
     EARNING = 'EARNING'
     DEDUCTION = 'DEDUCTION'
     BONUS = 'BONUS'
+    EMPLOYER_CONTRIBUTION = 'EMPLOYER_CONTRIBUTION'
 
 
 class CalculationMethod(BaseEnum):

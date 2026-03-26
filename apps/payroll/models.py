@@ -39,7 +39,7 @@ class SalaryComponent(BaseModel):
     _display_id_field = 'salary_component_id'
     name = models.CharField(max_length=100, unique=True)
     component_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=ComponentType.choices()
     )
     calculation_method = models.CharField(
@@ -47,7 +47,6 @@ class SalaryComponent(BaseModel):
         choices=CalculationMethod.choices(),
         default=CalculationMethod.FIXED.value
     )
-    is_taxable = models.BooleanField(default=True)
     is_basic_salary = models.BooleanField(
         default=False,
         help_text="Mark as True for the Basic Salary component. Only one component should have this set."
@@ -109,8 +108,7 @@ class EmployeeSalaryStructure(BaseModel):
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(0)],
-        editable=False,
-        help_text="System-calculated. FIXED: flat value. PERCENTAGE: derived from CTC/Basic."
+        help_text="Suggested amount based on Master Library formula. HR can override this per employee."
     )
     effective_from_at = models.DateTimeField(
         help_text="Date and time from which this salary structure is effective"
@@ -128,71 +126,6 @@ class EmployeeSalaryStructure(BaseModel):
     
     def __str__(self):
         return f"{self.employee.user.get_full_name()} - {self.salary_component.name}"
-
-
-class TaxRule(BaseModel):
-    """Configurable tax slabs"""
-    
-    # Auto-generated slug from name (primary business identifier)
-    code = models.SlugField(
-        max_length=50,
-        unique=True,
-        db_index=True,
-        blank=True,
-        help_text="Auto-generated from name (e.g., india-tax-slab-1-0-3l)"
-    )
-    
-    # HRID identifier
-    tax_rule_id = models.CharField(
-        max_length=20,
-        unique=True,
-        editable=False,
-        null=True,
-        help_text="Format: TAXXXXXXX"
-    )
-    _display_id_prefix = 'TAX'
-    _display_id_field = 'tax_rule_id'
-    name = models.CharField(max_length=100)
-    country = models.CharField(max_length=2, default='IN')  # ISO country code
-    min_income = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
-    )
-    max_income = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-        null=True,
-        blank=True
-    )
-    tax_percentage = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
-    )
-    is_active = models.BooleanField(default=True)
-    
-    class Meta:
-        db_table = 'tax_rules'
-        ordering = ['country', 'min_income']
-    
-    def __str__(self):
-        return f"{self.name} ({self.country}): {self.tax_percentage}%"
-    
-    def save(self, *args, **kwargs):
-        # Auto-generate code from name if not provided
-        is_new = self._state.adding
-        if not self.code:
-            self.code = slugify(self.name)
-            
-            if TaxRule.objects.filter(code=self.code).exclude(pk=self.pk).exists():
-                raise ValueError(f"Slug collision for tax rule code '{self.code}'. Rename the tax rule.")
-            logger.debug(f"Auto-generated code for tax rule | Code: {self.code}")
-        
-        super().save(*args, **kwargs)
-        if is_new:
-            logger.info(f"New tax rule created | Code: {self.code} | Country: {self.country}")
 
 
 class PayrollRun(BaseModel):
@@ -368,7 +301,7 @@ class PayslipComponent(BaseModel):
     )
     component_name = models.CharField(max_length=100)
     component_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=ComponentType.choices()
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
