@@ -47,13 +47,12 @@ class PayrollProcessor:
         Returns: dict with processing results
         """
         # Update status to PROCESSING
-        logger.info(f"Starting execution of payroll processing | Run ID: {self.payroll_run.id}")
+        logger.info(f"Starting execution of payroll processing | Run ID: {self.payroll_run.payroll_run_id}")
         self.payroll_run.status = PayrollStatus.PROCESSING.value
         self.payroll_run.save()
         
         try:
             # Get all active employees with related data preloaded
-            # Optimization: select_related prevents N+1 queries when accessing employee.user or employee.department
             employees = Employee.objects.filter(
                 is_active=True,
                 is_deleted=False
@@ -72,7 +71,7 @@ class PayrollProcessor:
                 
                 if existing:
                     logger.debug(f"Payslip already exists for employee {employee.employee_id}, skipping.")
-                    continue  # Skip if already processed
+                    continue
                 
                 # Calculate salary for this employee
                 salary_data = self.calculate_employee_salary(employee)
@@ -83,11 +82,27 @@ class PayrollProcessor:
                     payslips_created += 1
                     logger.debug(f"Generated payslip for {employee.employee_id}. Net: {salary_data['net_salary']}")
             
-            # Update status to COMPLETED
+            # Aggregate totals for the PayrollRun
+            totals = Payslip.objects.filter(
+                payroll_run=self.payroll_run,
+                is_deleted=False
+            ).aggregate(
+                gross=models.Sum('gross_salary'),
+                deductions=models.Sum('total_deductions'),
+                net=models.Sum('net_salary')
+            )
+            
+            # Update status and totals
             self.payroll_run.status = PayrollStatus.COMPLETED.value
-            self.payroll_run.total_employees = payslips_created
+            self.payroll_run.total_gross_salary = totals['gross'] or 0
+            self.payroll_run.total_deductions = totals['deductions'] or 0
+            self.payroll_run.total_net_salary = totals['net'] or 0
             self.payroll_run.save()
-            logger.info(f"Payroll processing COMPLETED for run {self.payroll_run.id}. Total payslips: {payslips_created}")
+            
+            logger.info(
+                f"Payroll processing COMPLETED for run {self.payroll_run.payroll_run_id}. "
+                f"Total payslips: {payslips_created} | Total Net: {self.payroll_run.total_net_salary}"
+            )
             
             return {
                 'success': True,
@@ -97,7 +112,7 @@ class PayrollProcessor:
             
         except Exception as e:
             # Update status to FAILED
-            logger.error(f"Payroll processing FAILED | Run ID: {self.payroll_run.id} | Error: {str(e)}", exc_info=True)
+            logger.error(f"Payroll processing FAILED | Run ID: {self.payroll_run.payroll_run_id} | Error: {str(e)}", exc_info=True)
             self.payroll_run.status = PayrollStatus.FAILED.value
             self.payroll_run.save()
             raise e
@@ -108,24 +123,27 @@ class PayrollProcessor:
         Returns: dict with salary breakdown or None if no salary structure
         """
         # Get active salary structures for this month
+        # We look for structures that were active at any point during this month
+        month_start = timezone.make_aware(timezone.datetime(self.year, self.month, 1))
+        
         structures = EmployeeSalaryStructure.objects.filter(
             employee=employee,
             effective_from_at__lte=timezone.now(),
             is_deleted=False
         ).filter(
-            # Either no end date OR end date is after this month
-            models.Q(effective_to__isnull=True) | 
-            models.Q(effective_to__gte=date(self.year, self.month, 1))
+            models.Q(effective_to_at__isnull=True) | 
+            models.Q(effective_to_at__gte=month_start)
         ).select_related('salary_component')
         
         if not structures.exists():
             logger.warning(f"Calculations skipped: No active salary structure found | Employee ID: {employee.employee_id} | Period: {self.month}/{self.year}")
-            return None  # No salary structure for this employee
+            return None
         
         # Calculate earnings and deductions
         earnings = []
         deductions = []
         bonuses = []
+        employer_contributions = []
         
         gross_salary = Decimal('0.00')
         total_deductions = Decimal('0.00')
@@ -148,6 +166,10 @@ class PayrollProcessor:
             elif component.component_type == ComponentType.BONUS.value:
                 bonuses.append(component_data)
                 gross_salary += amount
+            elif component.component_type == ComponentType.EMPLOYER_CONTRIBUTION.value:
+                employer_contributions.append(component_data)
+                # Employer contributions do NOT add to gross salary (CTC != Gross)
+                # but they are part of the total cost to company.
         
         # Get unpaid leave deduction
         unpaid_leaves = self.get_unpaid_leaves(employee)
@@ -155,11 +177,10 @@ class PayrollProcessor:
         leave_days_count = 0
         
         if unpaid_leaves and self.working_days > 0:
-            # Calculate total unpaid leave days
             for leave in unpaid_leaves:
                 leave_days_count += leave.duration
             
-            # Calculate per-day salary
+            # Calculate per-day salary based on Gross
             per_day_salary = gross_salary / Decimal(str(self.working_days))
             leave_deduction = per_day_salary * Decimal(str(leave_days_count))
             total_deductions += leave_deduction
@@ -169,41 +190,29 @@ class PayrollProcessor:
         net_salary = gross_salary - total_deductions
         
         return {
-            'gross_salary': gross_salary,
-            'total_deductions': total_deductions,
-            'net_salary': net_salary,
+            'gross_salary': gross_salary.quantize(Decimal('0.01')),
+            'total_deductions': total_deductions.quantize(Decimal('0.01')),
+            'net_salary': net_salary.quantize(Decimal('0.01')),
             'leave_days_deducted': leave_days_count,
-            'leave_deduction': leave_deduction,
+            'leave_deduction': leave_deduction.quantize(Decimal('0.01')),
             'earnings': earnings,
             'deductions': deductions,
-            'bonuses': bonuses
+            'bonuses': bonuses,
+            'employer_contributions': employer_contributions
         }
     
     def get_unpaid_leaves(self, employee: Employee):
-        """
-        Get validated unpaid leaves for the month
-        Only returns leaves that are:
-        1. UNPAID type
-        2. APPROVED status
-        3. On working days (validated)
-        """
-        # Get unpaid approved leaves for this month
-        leaves = LeaveRequest.objects.filter(
+        """Get validated unpaid leaves for the month"""
+        return LeaveRequest.objects.filter(
             employee=employee,
             leave_type=LeaveType.UNPAID.value,
             status=LeaveRequestStatus.APPROVED.value,
             started_at__year=self.year,
             started_at__month=self.month
         )
-        
-        # Filter to only working days
-        # Note: The duration property already excludes weekends and holidays
-        # So we can use it directly
-        return leaves
     
     def _create_payslip(self, employee: Employee, salary_data: dict):
         """Create payslip and payslip components"""
-        # Create payslip
         payslip = Payslip.objects.create(
             payroll_run=self.payroll_run,
             employee=employee,
@@ -214,10 +223,7 @@ class PayrollProcessor:
             net_salary=salary_data['net_salary'],
             leave_days_deducted=salary_data['leave_days_deducted']
         )
-        logger.debug(f"Payslip record created | Payslip ID: {payslip.payslip_id} | Employee ID: {employee.employee_id}")
         
-        # Create payslip components using bulk_create for efficiency
-        # Optimization: bulk_create reduces queries from 10N to 1 (where N = number of components)
         components_to_create = []
         
         # Add earnings
@@ -226,7 +232,7 @@ class PayrollProcessor:
                 PayslipComponent(
                     payslip=payslip,
                     component_name=earning['component'].name,
-                    component_type='EARNING',
+                    component_type=ComponentType.EARNING.value,
                     amount=earning['amount']
                 )
             )
@@ -237,7 +243,7 @@ class PayrollProcessor:
                 PayslipComponent(
                     payslip=payslip,
                     component_name=deduction['component'].name,
-                    component_type='DEDUCTION',
+                    component_type=ComponentType.DEDUCTION.value,
                     amount=deduction['amount']
                 )
             )
@@ -248,8 +254,19 @@ class PayrollProcessor:
                 PayslipComponent(
                     payslip=payslip,
                     component_name=bonus['component'].name,
-                    component_type='BONUS',
+                    component_type=ComponentType.BONUS.value,
                     amount=bonus['amount']
+                )
+            )
+
+        # Add employer contributions
+        for contrib in salary_data['employer_contributions']:
+            components_to_create.append(
+                PayslipComponent(
+                    payslip=payslip,
+                    component_name=contrib['component'].name,
+                    component_type=ComponentType.EMPLOYER_CONTRIBUTION.value,
+                    amount=contrib['amount']
                 )
             )
         
@@ -259,12 +276,11 @@ class PayrollProcessor:
                 PayslipComponent(
                     payslip=payslip,
                     component_name='Unpaid Leave Deduction',
-                    component_type='DEDUCTION',
+                    component_type=ComponentType.DEDUCTION.value,
                     amount=salary_data['leave_deduction']
                 )
             )
         
-        # Bulk create all components in a single query
         if components_to_create:
             PayslipComponent.objects.bulk_create(components_to_create)
         
