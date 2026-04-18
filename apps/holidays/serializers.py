@@ -43,7 +43,8 @@ class HolidaySerializer(BaseSerializer):
     def validate_holiday_date(self, value):
         """Validate that new holidays are not in the past"""
         # Only validate for creation, not updates
-        if not self.instance and value < date_type.today():
+        compare_date = value.date() if hasattr(value, 'date') else value
+        if not self.instance and compare_date < date_type.today():
             raise serializers.ValidationError(
                 "Cannot create holidays for past dates."
             )

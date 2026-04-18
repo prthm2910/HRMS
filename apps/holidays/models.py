@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from apps.base.models import BaseModel
 from apps.holidays.constants import HolidayExtractionStatus
+from apps.base.utils import generate_unique_id
 from datetime import date
 import logging
 
@@ -118,7 +119,7 @@ class Holiday(BaseModel):
         # Generate recurring group ID if this is a new recurring holiday
         # Generate recurring group ID if this is a new recurring holiday
         if is_new and self.is_recurring and not self.recurring_group_id:
-            from apps.base.utils import generate_unique_id
+            
             self.recurring_group_id = generate_unique_id(self.__class__, 'recurring_group_id', prefix='RGP', length=6)
         
         # Save the current instance first
@@ -155,6 +156,7 @@ class Holiday(BaseModel):
             if not exists:
                 holidays_to_create.append(
                     Holiday(
+                        holiday_id=generate_unique_id(self.__class__, 'holiday_id', prefix='HOL', length=6),
                         holiday_date=future_date,
                         name=self.name,
                         description=self.description,
@@ -179,8 +181,11 @@ class Holiday(BaseModel):
         # Delete all future holidays in this recurring group
         Holiday.objects.filter(
             recurring_group_id=self.recurring_group_id,
-            date__gt=date.today()
-        ).delete()
+            holiday_date__year__gt=date.today().year
+        ).update(
+            is_deleted=True,
+            is_active=False
+        )
         
         # Clear recurring_group_id for all remaining holidays in the group
         Holiday.objects.filter(
