@@ -1,4 +1,7 @@
+import logging
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 def get_db_config(env):
     """
@@ -30,6 +33,7 @@ def get_simple_jwt_config(env):
     # If using standard os.getenv, use: int(env('VAR', 30))
     access_token_hours = env.int('ACCESS_TOKEN_LIFETIME_HOURS', default=10)
     refresh_token_days = env.int('REFRESH_TOKEN_LIFETIME_DAYS', default=1)
+    logger.debug(f"Generating Simple JWT configuration | Access: {access_token_hours}h | Refresh: {refresh_token_days}d")
 
     return {
         'ACCESS_TOKEN_LIFETIME': timedelta(hours=access_token_hours),

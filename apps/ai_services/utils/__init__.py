@@ -6,6 +6,9 @@ Helper functions for AI operations:
 - File handling
 - Data transformation
 """
+import logging
+logger = logging.getLogger(__name__)
+logger.debug("Initializing apps.ai_services.utils package")
 
 from apps.ai_services.utils.image import validate_image_file
 

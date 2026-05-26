@@ -3,6 +3,9 @@ from django.dispatch import receiver
 from apps.organization.models import Employee
 from apps.leaves.models import LeaveBalance, LeaveRequest, LeaveType
 from django.db.models import F
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- 1. Auto-Create Balances for New Employees ---
 @receiver(post_save, sender=Employee)
@@ -26,6 +29,7 @@ def create_leave_balances(sender, instance, created, **kwargs):
                 )
             )
         LeaveBalance.objects.bulk_create(balances)
+        logger.info(f"Initialized leave balances for new employee | Employee ID: {instance.employee_id} | Count: {len(balances)}")
 
 # --- 2. Capture Previous Status (The Memory) ---
 @receiver(pre_save, sender=LeaveRequest)
@@ -71,17 +75,17 @@ def update_leave_balance_on_status_change(sender, instance, created, **kwargs):
         # SCENARIO A: Granting Leave (Pending -> Approved)
         # Action: INCREASE used_leaves (Deduct Balance)
         if new_status == 'APPROVED' and old_status != 'APPROVED':
-            print(f"📉 Deducting {days_diff} days for {instance.employee}")
+            logger.info(f"Deducting leave balance | Request ID: {instance.id} | Employee ID: {instance.employee.employee_id} | Duration: {days_diff}d")
             balance.used_leaves = F('used_leaves') + days_diff
             balance.save()
 
         # SCENARIO B: Revoking Leave (Approved -> Rejected / Cancelled)
         # Action: DECREASE used_leaves (Refund Balance)
         elif old_status == 'APPROVED' and new_status != 'APPROVED':
-            print(f"📈 Refunding {days_diff} days to {instance.employee}")
+            logger.info(f"Refunding leave balance | Request ID: {instance.id} | Employee ID: {instance.employee.employee_id} | Duration: {days_diff}d")
             # We use F() to handle potential race conditions safely
             balance.used_leaves = F('used_leaves') - days_diff
             balance.save()
             
     except LeaveBalance.DoesNotExist:
-        print(f"⚠️ CRITICAL: No Leave Balance found for {instance.employee}")
+        logger.error(f"CRITICAL: Leave balance record missing | Employee ID: {instance.employee.employee_id} | Type: {instance.leave_type}")

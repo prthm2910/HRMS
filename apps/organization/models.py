@@ -1,13 +1,28 @@
-import uuid
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from apps.base.models import BaseTemplateModel
+from apps.base.models import BaseModel
+from apps.organization.constants import EmploymentType
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class Department(BaseTemplateModel):
+class Department(BaseModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
+
+    # Human-Readable ID
+    department_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: DEPXXXXXX"
+    )
+
+    _display_id_prefix = 'DEP'
+    _display_id_field = 'department_id'
 
     def __str__(self):
         return self.name
@@ -18,15 +33,7 @@ class Department(BaseTemplateModel):
         db_table = 'departments'
 
 
-class EmploymentType(models.TextChoices):
-    """Employment type choices for Employee model"""
-    FULL_TIME = 'FULL_TIME', 'Full Time'
-    PART_TIME = 'PART_TIME', 'Part Time'
-    CONTRACT = 'CONTRACT', 'Contract'
-    INTERN = 'INTERN', 'Intern'
-
-
-class Employee(BaseTemplateModel):
+class Employee(BaseModel):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -53,13 +60,18 @@ class Employee(BaseTemplateModel):
     designation = models.CharField(max_length=100)
     employment_type = models.CharField(
         max_length=20, 
-        choices=EmploymentType.choices, 
-        default=EmploymentType.FULL_TIME
+        choices=EmploymentType.choices(), 
+        default=EmploymentType.FULL_TIME.value
     )
-    date_of_joining = models.DateField()
+    # Employment details
+    joined_at = models.DateTimeField(help_text="Date and time when employee joined the organization")
+    
+    # Personal details
+    born_at = models.DateTimeField(null=True, blank=True, help_text="Date and time of birth")
+    salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Annual CTC (Cost to Company) in INR")
 
-    date_of_birth = models.DateField(null=True, blank=True)
-    salary = models.DecimalField(max_digits=10, decimal_places=2, help_text="Gross Monthly Salary")
+    _display_id_prefix = 'EMP'
+    _display_id_field = 'employee_id'
 
     manager = models.ForeignKey(
         'self', 
@@ -78,35 +90,43 @@ class Employee(BaseTemplateModel):
         db_table = 'employees'
 
     def save(self, *args, **kwargs):
-        # Auto-generate ID if it doesn't exist
-        if not self.employee_id:
-            while True:
-                # Generates a random hex string (e.g., 'a1b2c3')
-                # .hex[:6] takes the first 6 characters.
-                random_suffix = uuid.uuid4().hex[:6].upper()
-                
-                # Format: EMP + RandomString (No hyphen) -> EMPA1B2C3
-                new_id = f"EMP{random_suffix}"
-                
-                # Check if this ID already exists to prevent duplicates
-                if not Employee.objects.filter(employee_id=new_id).exists():
-                    self.employee_id = new_id
-                    break
-        
+        is_new = self._state.adding
         super().save(*args, **kwargs)
+        if is_new:
+            logger.info(f"New employee profile saved | Employee ID: {self.employee_id} | User ID: {self.user.id}")
+        else:
+            logger.debug(f"Employee profile updated | Employee ID: {self.employee_id}")
 
     def clean(self):
     # 1. Prevent reporting to yourself
         if self.manager == self:
+            logger.warning(f"Hierarchy validation failed | Self-reporting attempt | Employee ID: {self.employee_id}")
             raise ValidationError("You cannot report to yourself.")
         
-        # 2. Prevent simple cycles (A -> B -> A)
-        # Note: For deep cycles (A->B->C->A), you need more complex logic, 
-        # but strictly checking immediate parent is the bare minimum.
-        if self.manager and self.manager.manager == self:
-            raise ValidationError("Circular reporting detected.")    
+        # 2. Prevent circular reporting (A -> B -> C -> A)
+        # Using a hashset for O(N) cycle detection, with a safety depth limit.
+        visited_managers = {self.id} if self.id else set()
+        current_manager = self.manager
+        depth = 0
+        MAX_DEPTH = 500
 
-class HOD(BaseTemplateModel):
+        while current_manager:
+            if current_manager.id in visited_managers:
+                logger.warning(
+                    f"Hierarchy validation failed | Circular reporting detected | "
+                    f"Employee: {self.employee_id} -> Manager: {current_manager.employee_id}"
+                )
+                raise ValidationError("Circular reporting detected.")
+            
+            visited_managers.add(current_manager.id)
+            current_manager = current_manager.manager
+            depth += 1
+            
+            if depth > MAX_DEPTH:
+                logger.error(f"Hierarchy validation failed | Maximum reporting depth exceeded | Employee: {self.employee_id}")
+                raise ValidationError("Maximum reporting depth exceeded. Potential infinite loop or invalid hierarchy.")
+
+class HOD(BaseModel):
     """
     Head of Department.
     Links an Employee to a Department they manage.
@@ -121,6 +141,17 @@ class HOD(BaseTemplateModel):
         on_delete=models.CASCADE,
         related_name='hod_profile'
     )
+
+    hod_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: HODXXXXXX"
+    )
+
+    _display_id_prefix = 'HOD'
+    _display_id_field = 'hod_id'
 
     def __str__(self):
         return f"HOD: {self.employee.user.username} - {self.department.name}"

@@ -1,18 +1,20 @@
 from datetime import date
+import logging
 from rest_framework import status
 from rest_framework.response import Response
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from apps.base.utils import get_employee_profile
 from apps.base.views import (
-    BaseReadOnlyAuthenticatedViewSet,
-    BaseRoleFilteredViewSet,
-    BaseRoleFilteredReadOnlyViewSet,
-    AdminWritePermissionMixin,
+    BaseReadOnlyFilteredViewSet,
+    RoleReadOnlyViewSet,
     BaseCreateOnlyAuthenticatedViewSet,
-    DeleteMixin
+    DeleteMixin,
+    RoleFullViewSet,
+    RoleFilteredMixin # Added
 )
-from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveStatus
+from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveRequestStatus, LeaveType, HalfDayPeriod
+from apps.leaves.filters import LeaveRequestFilter, SubordinateLeaveRequestFilter
 from apps.leaves.serializers import (
     LeaveRequestSerializer, 
     LeaveBalanceSerializer, 
@@ -22,8 +24,10 @@ from apps.leaves.serializers import (
     BulkLeaveResponseSerializer
 )
 
+logger = logging.getLogger(__name__)
+
 @extend_schema(tags=['Leave Balance'])
-class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
+class LeaveBalanceViewSet(RoleReadOnlyViewSet):
     """
     View to check remaining leaves. 
     Strictly Read-Only for everyone.
@@ -42,55 +46,50 @@ class LeaveBalanceViewSet(BaseRoleFilteredReadOnlyViewSet):
 
 
 @extend_schema(tags=['My Leave Requests'])
-class MyLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
+class MyLeaveRequestViewSet(RoleFilteredMixin, BaseReadOnlyFilteredViewSet):
     """
     View for employees to see their own leave requests.
     Returns all leave requests created by the authenticated user.
     """
     serializer_class = LeaveRequestSerializer
+    queryset = LeaveRequest.objects.all()
+    filterset_class = LeaveRequestFilter
+    search_fields = ['reason', 'leave_request_id']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
 
-    def get_queryset(self):
-        user = self.request.user
-        employee_profile = get_employee_profile(user)
-        if not employee_profile:
-            return LeaveRequest.objects.none()
-        
-        queryset = LeaveRequest.objects.filter(employee=employee_profile)
-        
-        status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter.upper() in dict(LeaveStatus.choices):
-            queryset = queryset.filter(status=status_filter.upper())
-        
-        return queryset.order_by('-created_at')
+    def get_admin_queryset(self):
+        return self.queryset.select_related('employee__user', 'employee__department').order_by('-created_at')
+
+    def get_standard_user_queryset(self, employee_profile):
+        return self.queryset.filter(
+            employee=employee_profile
+        ).select_related('employee__user', 'employee__department').order_by('-created_at')
 
 
 @extend_schema(tags=['Subordinate Leave Requests'])
-class SubordinateLeaveRequestViewSet(BaseReadOnlyAuthenticatedViewSet):
+class SubordinateLeaveRequestViewSet(RoleFilteredMixin, BaseReadOnlyFilteredViewSet):
     """
     View for managers to see leave requests from their subordinates.
     """
     serializer_class = LeaveRequestSerializer
+    queryset = LeaveRequest.objects.all()
+    filterset_class = SubordinateLeaveRequestFilter
+    search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__employee_id', 'reason']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
 
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser or user.is_staff:
-            queryset = LeaveRequest.objects.all()
-        else:
-            employee_profile = get_employee_profile(user)
-            if not employee_profile:
-                return LeaveRequest.objects.none()
-            queryset = LeaveRequest.objects.filter(employee__manager=employee_profile)
-        
-        status_filter = self.request.query_params.get('status', 'pending')
-        if status_filter.lower() != 'all':
-            if status_filter.upper() in dict(LeaveStatus.choices):
-                queryset = queryset.filter(status=status_filter.upper())
-        
-        return queryset.order_by('-created_at')
+    def get_admin_queryset(self):
+        return self.queryset.select_related('employee__user', 'employee__department').order_by('-created_at')
+
+    def get_standard_user_queryset(self, employee_profile):
+        return self.queryset.filter(
+            employee__manager=employee_profile
+        ).select_related('employee__user', 'employee__department').order_by('-created_at')
 
 
 @extend_schema(tags=['Leave Requests'])
-class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+class LeaveApplyViewSet(DeleteMixin, RoleFullViewSet):
     """
     Endpoint for applying for leave and managing leave requests.
     - POST: Apply for new leave
@@ -99,6 +98,10 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
     """
     queryset = LeaveRequest.objects.all()
     serializer_class = LeaveRequestSerializer
+    filterset_class = LeaveRequestFilter
+    search_fields = ['leave_request_id']
+    ordering_fields = ['created_at', 'started_at']
+    ordering = ['-created_at']
     admin_forbidden_message = "Forbidden: Deletion is restricted to Administrators."
 
     def get_admin_queryset(self):
@@ -141,8 +144,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
                     {
                         'type': 'object',
                         'properties': {
-                            'start_date': {'type': 'string', 'format': 'date'},
-                            'end_date': {'type': 'string', 'format': 'date'},
+                            'started_at': {'type': 'string', 'format': 'date'},
+                            'ended_at': {'type': 'string', 'format': 'date'},
                             'reason': {'type': 'string'},
                             'leave_type': {'type': 'string', 'enum': ['SICK', 'CASUAL', 'EARNED', 'UNPAID']},
                             'is_half_day': {'type': 'boolean'},
@@ -170,8 +173,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
                 'Employee: Edit Leave Dates',
                 description='Employee edits their own pending leave request',
                 value={
-                    'start_date': '2026-02-20',
-                    'end_date': '2026-02-23',
+                    'started_at': '2026-02-20',
+                    'ended_at': '2026-02-23',
                     'reason': 'Updated: Medical appointment rescheduled'
                 },
                 request_only=True,
@@ -185,8 +188,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
         - Add `rejection_reason` when rejecting
         
         **Employees can:**
-        - Edit their own PENDING requests if start_date is in the future
-        - Change: start_date, end_date, reason, leave_type, is_half_day, half_day_period
+        - Edit their own PENDING requests if started_at is in the future
+        - Change: started_at, ended_at, reason, leave_type, is_half_day, half_day_period
         - Cannot change: status (only managers can approve/reject)
         
         **Restrictions:**
@@ -200,23 +203,27 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
         # But we now get the benefit of AdminWritePermissionMixin for destroy().
         instance = self.get_object()
         user = request.user
+        logger.info(f"Update leave request initiated | Request ID: {instance.id} | User ID: {user.id}")
         user_employee = get_employee_profile(user)
 
         # 1. Admin full access
         if user.is_superuser:
+            logger.info(f"Superuser overriding update | Request ID: {instance.id}")
             return super().update(request, *args, **kwargs)
 
         # 2. Employee editing their own request
         if instance.employee == user_employee:
             # Check if status is PENDING
-            if instance.status != 'PENDING':
+            if instance.status != LeaveRequestStatus.PENDING.value:
+                logger.warning(f"Employee update rejected | Request {instance.id} already {instance.status} | User ID: {user.id}")
                 return Response(
                     {"detail": f"Cannot edit: Leave request is already {instance.status}. Contact your manager for changes."},
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            # Check if start_date is in the future
-            if instance.start_date <= date.today():
+            # Check if started_at is in the future
+            if instance.started_at.date() <= date.today():
+                logger.warning(f"Employee update rejected | Request {instance.id} has already started | User ID: {user.id}")
                 return Response(
                     {"detail": "Cannot edit: Leave has already started or is in the past."},
                     status=status.HTTP_403_FORBIDDEN
@@ -224,6 +231,7 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
             
             # Check if trying to change status
             if 'status' in request.data:
+                logger.warning(f"Employee update rejected | Attempted status change | Request ID: {instance.id} | User ID: {user.id}")
                 return Response(
                     {"detail": "Forbidden: You cannot change the status. Only your manager can approve/reject."},
                     status=status.HTTP_403_FORBIDDEN
@@ -237,12 +245,14 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
             allowed_fields = ['status', 'rejection_reason']
             disallowed_fields = [key for key in request.data.keys() if key not in allowed_fields]
             if disallowed_fields:
+                logger.warning(f"Manager update rejected | Disallowed fields {disallowed_fields} | Request ID: {instance.id} | User ID: {user.id}")
                 return Response(
                     {
                         "detail": f"Forbidden: Managers can only modify 'status' or 'rejection_reason'. You sent: {', '.join(disallowed_fields)}"
                     },
                     status=status.HTTP_403_FORBIDDEN
                 )
+            logger.info(f"Manager updating request status | Request ID: {instance.id} | New Status: {request.data.get('status')} | User ID: {user.id}")
             return super().update(request, *args, **kwargs)
 
         return Response(
@@ -266,14 +276,14 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
                     {
                         'type': 'object',
                         'properties': {
-                            'start_date': {'type': 'string', 'format': 'date'},
-                            'end_date': {'type': 'string', 'format': 'date'},
+                            'started_at': {'type': 'string', 'format': 'date'},
+                            'ended_at': {'type': 'string', 'format': 'date'},
                             'reason': {'type': 'string'},
                             'leave_type': {'type': 'string', 'enum': ['SICK', 'CASUAL', 'EARNED', 'UNPAID']},
                             'is_half_day': {'type': 'boolean'},
                             'half_day_period': {'type': 'string', 'enum': ['FIRST_HALF', 'SECOND_HALF'], 'nullable': True}
                         },
-                        'description': 'Employee: Edit pending leave request (only if status=PENDING and start_date is future)'
+                        'description': 'Employee: Edit pending leave request (only if status=PENDING and started_at is future)'
                     }
                 ]
             }
@@ -295,8 +305,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
                 'Employee: Edit Leave Dates',
                 description='Employee edits their own pending leave request',
                 value={
-                    'start_date': '2026-02-20',
-                    'end_date': '2026-02-23',
+                    'started_at': '2026-02-20',
+                    'ended_at': '2026-02-23',
                     'reason': 'Updated: Medical appointment rescheduled'
                 },
                 request_only=True,
@@ -310,8 +320,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
         - Add `rejection_reason` when rejecting
         
         **Employees can:**
-        - Edit their own PENDING requests if start_date is in the future
-        - Change: start_date, end_date, reason, leave_type, is_half_day, half_day_period
+        - Edit their own PENDING requests if started_at is in the future
+        - Change: started_at, ended_at, reason, leave_type, is_half_day, half_day_period
         - Cannot change: status (only managers can approve/reject)
         
         **Restrictions:**
@@ -328,7 +338,8 @@ class LeaveApplyViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFiltered
         if isinstance(serializer, LeaveActionSerializer):
             validated_data = serializer.validated_data or {}
             new_status = validated_data.get('status')
-            if new_status in ['APPROVED', 'REJECTED']:
+            if new_status in [LeaveRequestStatus.APPROVED.value, LeaveRequestStatus.REJECTED.value]:
+                logger.info(f"Action performed by manager: {new_status} - Leave ID: {serializer.instance.id}")
                 serializer.save(action_by=user_employee)
             else:
                 serializer.save()
@@ -355,24 +366,24 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
                 value={
                     "requests": [
                         {
-                            "leave_type": "CASUAL",
-                            "start_date": "2026-02-10",
-                            "end_date": "2026-02-12",
+                            "leave_type": LeaveType.CASUAL.value,
+                            "started_at": "2026-02-10",
+                            "ended_at": "2026-02-12",
                             "reason": "Family function",
                             "is_half_day": False
                         },
                         {
-                            "leave_type": "SICK",
-                            "start_date": "2026-03-05",
-                            "end_date": "2026-03-05",
+                            "leave_type": LeaveType.SICK.value,
+                            "started_at": "2026-03-05",
+                            "ended_at": "2026-03-05",
                             "reason": "Medical appointment",
                             "is_half_day": True,
-                            "half_day_period": "FIRST_HALF"
+                            "half_day_period": HalfDayPeriod.FIRST_HALF.value
                         },
                         {
-                            "leave_type": "EARNED",
-                            "start_date": "2026-04-15",
-                            "end_date": "2026-04-18",
+                            "leave_type": LeaveType.EARNED.value,
+                            "started_at": "2026-04-15",
+                            "ended_at": "2026-04-18",
                             "reason": "Vacation",
                             "is_half_day": False
                         }
@@ -390,8 +401,8 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
           "requests": [
             {
               "leave_type": "CASUAL|SICK|EARNED|UNPAID",
-              "start_date": "YYYY-MM-DD",
-              "end_date": "YYYY-MM-DD",
+              "started_at": "YYYY-MM-DD",
+              "ended_at": "YYYY-MM-DD",
               "reason": "string",
               "is_half_day": true|false,
               "half_day_period": "FIRST_HALF|SECOND_HALF" (required if is_half_day=true)
@@ -417,6 +428,8 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
         Bulk leave application endpoint.
         Creates multiple leave requests and returns partial success.
         """
+        user = request.user
+        logger.info(f"Bulk leave application initiated | User ID: {user.id}")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -435,7 +448,7 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
                     successful_requests.append({
                         'index': idx,
                         'id': leave_request.id,
-                        'dates': f"{leave_request.start_date} to {leave_request.end_date}",
+                        'dates': f"{leave_request.started_at.date()} to {leave_request.ended_at.date()}",
                         'leave_type': leave_request.leave_type,
                         'status': leave_request.status
                     })
@@ -462,6 +475,8 @@ class BulkLeaveApplyViewSet(BaseCreateOnlyAuthenticatedViewSet):
                 'failed': len(failed_requests)
             }
         }
+        
+        logger.info(f"Bulk leave application completed | Successful: {len(successful_requests)} | Failed: {len(failed_requests)} | User ID: {user.id}")
         
         # Use response serializer for consistent output
         response_serializer = BulkLeaveResponseSerializer(data=response_data)

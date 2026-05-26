@@ -4,9 +4,12 @@ AI Services - OCR Validation Schemas
 Pydantic models for validating OCR extracted data.
 Moved from apps.holidays.serializers to centralize AI-related validation.
 """
+import logging
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import date as date_type
+
+logger = logging.getLogger(__name__)
 
 
 class HolidayExtraction(BaseModel):
@@ -25,6 +28,7 @@ class HolidayExtraction(BaseModel):
     def validate_name(cls, v: str) -> str:
         """Validate holiday name"""
         if not v or len(v.strip()) < 3:
+            logger.warning(f"Schema Validation Reject | Reason: Name too short | Length: {len(v) if v else 0}")
             raise ValueError('Holiday name must be at least 3 characters long')
         return v.strip().title()
     
@@ -33,6 +37,7 @@ class HolidayExtraction(BaseModel):
     def validate_date(cls, v: date_type) -> date_type:
         """Validate that date is in the future (not today or past)"""
         if v <= date_type.today():
+            logger.warning(f"Schema Validation Reject | Reason: Date is not in future | Date: {v}")
             raise ValueError(f'Cannot add holidays for today or past dates. Date {v} must be in the future.')
         return v
     
@@ -61,6 +66,7 @@ class BulkHolidayExtraction(BaseModel):
         """Check for duplicate dates in the batch"""
         dates = [h.date for h in v]
         if len(dates) != len(set(dates)):
+            logger.warning(f"Bulk Schema Validation Reject | Reason: Duplicate dates | Count: {len(dates) - len(set(dates))}")
             raise ValueError('Duplicate dates found in the holiday list')
         return v
     

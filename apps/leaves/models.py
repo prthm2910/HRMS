@@ -1,51 +1,43 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from apps.base.models import BaseTemplateModel
-from apps.base.utils import calculate_working_days
+from apps.base.models import BaseModel
+from apps.base.utils import calculate_working_and_non_working_days
 from apps.organization.models import Employee
+from apps.leaves.constants import LeaveType, HalfDayPeriod, LeaveRequestStatus
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class LeaveType(models.TextChoices):
-    """Leave type choices"""
-    SICK = 'SICK', 'Sick Leave'
-    CASUAL = 'CASUAL', 'Casual Leave'
-    EARNED = 'EARNED', 'Earned/Privilege Leave'
-    UNPAID = 'UNPAID', 'Loss of Pay (LWP)'
+class LeaveRequest(BaseModel):
+    leave_request_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: LEVXXXXXX"
+    )
 
+    _display_id_prefix = 'LEV'
+    _display_id_field = 'leave_request_id'
 
-class HalfDayPeriod(models.TextChoices):
-    """Half day period choices"""
-    FIRST_HALF = 'FIRST_HALF', 'First Half'
-    SECOND_HALF = 'SECOND_HALF', 'Second Half'
-
-
-class LeaveStatus(models.TextChoices):
-    """Leave request status choices"""
-    PENDING = 'PENDING', 'Pending'
-    APPROVED = 'APPROVED', 'Approved'
-    REJECTED = 'REJECTED', 'Rejected'
-    CANCELLED = 'CANCELLED', 'Cancelled'
-
-
-class LeaveRequest(BaseTemplateModel):
     # 1. Who and What
     employee = models.ForeignKey(
         Employee, 
         on_delete=models.CASCADE, 
         related_name='leave_requests'
     )
-    leave_type = models.CharField(max_length=20, choices=LeaveType.choices)
-    
+    leave_type = models.CharField(max_length=20, choices=LeaveType.choices())
     # 2. When
-    start_date = models.DateField()
-    end_date = models.DateField()
+    started_at = models.DateTimeField(help_text="Start date and time of leave")
+    ended_at = models.DateTimeField(help_text="End date and time of leave")
     
     # 2.1 Half-Day Support
     is_half_day = models.BooleanField(default=False, help_text="Is this a half-day leave?")
     half_day_period = models.CharField(
         max_length=20, 
-        choices=HalfDayPeriod.choices, 
+        choices=HalfDayPeriod.choices(), 
         blank=True, 
         null=True,
         help_text="Which half of the day (required if is_half_day=True)"
@@ -55,7 +47,7 @@ class LeaveRequest(BaseTemplateModel):
     reason = models.TextField(help_text="Reason for leave")
     
     # 4. Approval Workflow
-    status = models.CharField(max_length=20, choices=LeaveStatus.choices, default=LeaveStatus.PENDING)
+    status = models.CharField(max_length=20, choices=LeaveRequestStatus.choices(), default=LeaveRequestStatus.PENDING.value)
     
     action_by = models.ForeignKey(
         Employee, 
@@ -76,22 +68,30 @@ class LeaveRequest(BaseTemplateModel):
         if self.is_half_day:
             return 0.5
         
-        if not self.start_date or not self.end_date:
+        if not self.started_at or not self.ended_at:
             return 0.0
         
         # Use utility function for working days calculation (returns tuple)
-        working_days, _ = calculate_working_days(self.start_date, self.end_date)
-        return float(working_days)
+        # Convert datetime to date for calculation
+        res = calculate_working_and_non_working_days(self.started_at.date(), self.ended_at.date())
+        working_days = float(res['working_days'])
+        
+        logger.debug(
+            f"Leave duration calculated | Request ID: {self.pk} | "
+            f"Period: {self.started_at.date()} to {self.ended_at.date()} | "
+            f"Working Days: {working_days} | Holidays: {res['holidays_count']}"
+        )
+        return working_days
 
 
     def clean(self):
         """Validation Logic"""
-        if self.start_date and self.end_date and self.start_date > self.end_date:
+        if self.started_at and self.ended_at and self.started_at.date() > self.ended_at.date():
             raise ValidationError(_("End date cannot be before start date."))
         
         # Half-day validations
         if self.is_half_day:
-            if self.start_date != self.end_date:
+            if self.started_at.date() != self.ended_at.date():
                 raise ValidationError(_("Half-day leave must have the same start and end date."))
             if not self.half_day_period:
                 raise ValidationError(_("Half-day period (First Half/Second Half) is required for half-day leaves."))
@@ -104,16 +104,27 @@ class LeaveRequest(BaseTemplateModel):
         db_table = 'leave_requests'
 
 
-class LeaveBalance(BaseTemplateModel):
+class LeaveBalance(BaseModel):
     """
     Tracks how many leaves an employee has available.
     """
+    leave_balance_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True,
+        help_text="Format: LBAXXXXXX"
+    )
+
+    _display_id_prefix = 'LBA'
+    _display_id_field = 'leave_balance_id'
+
     employee = models.ForeignKey(
         Employee, 
         on_delete=models.CASCADE, 
         related_name='leave_balances'
     )
-    leave_type = models.CharField(max_length=20, choices=LeaveType.choices)
+    leave_type = models.CharField(max_length=20, choices=LeaveType.choices())
     
     total_allocated = models.DecimalField(max_digits=5, decimal_places=1, default=0)
     used_leaves = models.DecimalField(max_digits=5, decimal_places=1, default=0)

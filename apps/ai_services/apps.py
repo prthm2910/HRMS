@@ -1,4 +1,7 @@
 from django.apps import AppConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AiServicesConfig(AppConfig):
@@ -11,3 +14,9 @@ class AiServicesConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.ai_services'
     verbose_name = 'AI Services'
+
+    def ready(self):
+        """
+        Signals that the application is ready and performs initialization tasks.
+        """
+        logger.info("AI Services app ready | Configurations initialized.")

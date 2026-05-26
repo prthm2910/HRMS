@@ -15,9 +15,9 @@ router = DefaultRouter()
 # (GET list of user's own leave requests - read only)
 router.register('my-requests', MyLeaveRequestViewSet, basename='my-leave-request')
 
-# 2. Endpoint: /api/leaves/subordinate-requests/
+# 2. Endpoint: /api/leaves/subordinates/
 # (GET list of subordinates' leave requests - read only, for managers)
-router.register('subordinate-requests', SubordinateLeaveRequestViewSet, basename='subordinate-leave-request')
+router.register('subordinates', SubordinateLeaveRequestViewSet, basename='subordinate-leave-request')
 
 # 3. Endpoint: /api/leaves/apply/
 # (POST to apply for leave, PATCH for managers to approve/reject)

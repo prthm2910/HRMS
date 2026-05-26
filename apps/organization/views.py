@@ -1,22 +1,25 @@
-from rest_framework import filters, status
+from rest_framework import status
+import logging
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
-from django.core.exceptions import ValidationError
-from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from apps.base.views import (
-    BaseReadAuthWriteAdminViewSet, 
+    AdminWriteViewSet, 
+    AdminWriteFullViewSet,
     DeleteMixin, 
-    AdminWritePermissionMixin,
-    BaseRoleFilteredViewSet
+    SuperadminRoleViewSet,
+    SuperadminFullViewSet
 )
 from apps.organization.models import Employee, Department, HOD
 from apps.organization.serializers import EmployeeSerializer, DepartmentSerializer, HODSerializer
 
+logger = logging.getLogger(__name__)
+
 
 @extend_schema(tags=['HODs'])
-class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+class HODViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     ViewSet for managing Heads of Department.
     Access:
@@ -26,7 +29,6 @@ class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet
     """
     queryset = HOD.objects.filter(is_deleted=False)
     serializer_class = HODSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['department', 'employee']
     search_fields = ['employee__user__username', 'department__name']
     ordering_fields = ['created_at']
@@ -37,7 +39,7 @@ class HODViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet
         return self.queryset.filter(employee=employee_profile)
 
 @extend_schema(tags=['Departments'])
-class DepartmentViewSet(DeleteMixin, BaseReadAuthWriteAdminViewSet):
+class DepartmentViewSet(DeleteMixin, AdminWriteFullViewSet):
     """
     Department Management.
     Access: Anyone authenticated can View. Only Admins can Create/Update/Delete.
@@ -46,10 +48,41 @@ class DepartmentViewSet(DeleteMixin, BaseReadAuthWriteAdminViewSet):
     """
     queryset = Department.objects.filter(is_deleted=False).order_by('name')
     serializer_class = DepartmentSerializer
+    filterset_fields = ['is_active']
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_at']
+
+    def get_standard_user_queryset(self, employee_profile):
+        """Anyone authenticated can view departments."""
+        return self.queryset
 
 
-@extend_schema(tags=['Employees'])
-class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredViewSet):
+@extend_schema(
+    tags=['Employees'],
+    examples=[
+        OpenApiExample(
+            'Create Employee',
+            description='Example request to create a new employee with identity details',
+            value={
+                'user_first_name': 'John',
+                'user_last_name': 'Doe',
+                'user_email': 'john.doe@example.com',
+                'user_password': 'securepassword123',
+                'user_mobile_number': '+919876543210',
+                'user_bio': 'Hello, I am a software engineer.',
+                'designation': 'Software Engineer',
+                'employment_type': 'FULL TIME',
+                'salary': 50000,
+                'department_id': 'DEPTA1B2C3',
+                'manager_id': 'EMPA1B2C3',
+                'joined_at': '2026-02-20',
+                'born_at': '1995-05-15'
+            },
+            request_only=True,
+        ),
+    ]
+)
+class EmployeeViewSet(DeleteMixin, SuperadminFullViewSet):
     """
     Employee Management.
     Access:
@@ -62,6 +95,10 @@ class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredVi
     """
     queryset = Employee.objects.filter(is_deleted=False)
     serializer_class = EmployeeSerializer
+    filterset_fields = ['department', 'manager', 'employment_type', 'is_active']
+    search_fields = ['user__first_name', 'user__last_name', 'user__email', 'employee_id']
+    ordering_fields = ['joined_at', 'created_at']
+    ordering = ['-created_at']
     admin_forbidden_message = "Forbidden: Only Administrators have permission to manage employee profiles."
 
     def get_admin_queryset(self):
@@ -91,22 +128,21 @@ class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredVi
         if user.is_superuser:
             # Admin can view anyone's team
             if manager_id:
-                try:
-                    target_manager = Employee.objects.get(id=manager_id)
-                except Employee.DoesNotExist:
-                     return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
             else:
                 # If admin calls without ID, what to show? 
                 # Maybe show root level managers (those with no manager)? 
                 # For now, let's require manager_id for admin usage or return empty to avoid massive dump.
                 # Actually user asked for "subordinates of THAT user" (meaning self default).
                 # But admins don't have an employee profile usually.
+                logger.warning(f"Admin team view rejected | Missing manager_id | User ID: {user.id}")
                 return Response({"detail": "Admins must provide ?manager_id=... to view a specific team."}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Regular Employee
             try:
                 myself = user.employee_profile
             except AttributeError:
+                logger.warning(f"Team view rejected | No employee profile | User ID: {user.id}")
                 return Response({"detail": "User has no employee profile."}, status=status.HTTP_403_FORBIDDEN)
             
             if manager_id:
@@ -115,10 +151,7 @@ class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredVi
                 # We can check this recursively or simply check if they are in my downline.
                 # Simplified check for MVP: Allow valid drill-down.
                 
-                # Check if target manager exists
-                target_manager = Employee.objects.filter(id=manager_id).first()
-                if not target_manager:
-                    return Response({"error": "Manager not found."}, status=status.HTTP_404_NOT_FOUND)
+                target_manager = get_object_or_404(Employee, id=manager_id)
 
                 # SECURITY: Verify target_manager is in my downline.
                 # Only allow viewing team of someone who is your direct or indirect report.
@@ -142,10 +175,13 @@ class EmployeeViewSet(AdminWritePermissionMixin, DeleteMixin, BaseRoleFilteredVi
                         depth += 1
                     
                     if not is_descendant:
+                         logger.warning(f"Team view unauthorized | Target: {manager_id} is not a descendant | User ID: {user.id}")
                          return Response({"detail": "You can only view teams of your subordinates."}, status=status.HTTP_403_FORBIDDEN)
             else:
                 # Default: View my own direct reports
                 target_manager = myself
+            
+            logger.info(f"Team drill-down accessed | Target Manager ID: {target_manager.id} | User ID: {user.id}")
 
         # 2. Fetch Direct Reports & Annotate with THEIR reports count
         direct_reports = Employee.objects.filter(

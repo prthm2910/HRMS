@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payslip - {{ employee.first_name }} {{ employee.last_name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2c3e50;
+        }
+        
+        .company-name {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .company-address {
+            font-size: 9pt;
+            color: #666;
+        }
+        
+        .payslip-title {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #34495e;
+            margin: 15px 0;
+            text-align: center;
+        }
+        
+        .info-section {
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .info-row {
+            display: table-row;
+        }
+        
+        .info-label {
+            display: table-cell;
+            width: 30%;
+            padding: 5px 10px;
+            font-weight: bold;
+            background-color: #ecf0f1;
+        }
+        
+        .info-value {
+            display: table-cell;
+            padding: 5px 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .salary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .salary-table th {
+            background-color: #34495e;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .salary-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .salary-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 15px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .summary-row {
+            font-weight: bold;
+            background-color: #e8f4f8 !important;
+            font-size: 11pt;
+        }
+        
+        .net-salary-row {
+            font-weight: bold;
+            background-color: #d5f4e6 !important;
+            font-size: 12pt;
+            color: #27ae60;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #34495e;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+        
+        .note {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            font-size: 9pt;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="company-name">{{ company_name }}</div>
+        {% if company_address %}
+        <div class="company-address">{{ company_address }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="payslip-title">PAYSLIP</div>
+    
+    <!-- Employee Information -->
+    <div class="info-section">
+        <div class="info-row">
+            <div class="info-label">Employee Name:</div>
+            <div class="info-value">{{ employee.first_name }} {{ employee.last_name }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Employee ID:</div>
+            <div class="info-value">{{ employee.employee_code }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Department:</div>
+            <div class="info-value">{{ employee.department.name }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Designation:</div>
+            <div class="info-value">{{ employee.designation }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Pay Period:</div>
+            <div class="info-value">{{ month_name }} {{ payslip.year }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Payment Date:</div>
+            <div class="info-value">{{ payroll_run.processed_at|date:"d M Y" }}</div>
+        </div>
+    </div>
+    
+    <!-- Earnings Section -->
+    <div class="section-title">Earnings</div>
+    <table class="salary-table">
+        <thead>
+            <tr>
+                <th>Component</th>
+                <th class="amount">Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for component in earnings %}
+            <tr>
+                <td>{{ component.component_name }}</td>
+                <td class="amount">{{ component.amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2" style="text-align: center; color: #999;">No earnings</td>
+            </tr>
+            {% endfor %}
+            <tr class="summary-row">
+                <td>Gross Salary</td>
+                <td class="amount">{{ payslip.gross_salary|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <!-- Bonuses Section (if any) -->
+    {% if bonuses %}
+    <div class="section-title">Bonuses</div>
+    <table class="salary-table">
+        <thead>
+            <tr>
+                <th>Component</th>
+                <th class="amount">Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for component in bonuses %}
+            <tr>
+                <td>{{ component.component_name }}</td>
+                <td class="amount">{{ component.amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    <!-- Deductions Section -->
+    <div class="section-title">Deductions</div>
+    <table class="salary-table">
+        <thead>
+            <tr>
+                <th>Component</th>
+                <th class="amount">Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for component in deductions %}
+            <tr>
+                <td>{{ component.component_name }}</td>
+                <td class="amount">{{ component.amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2" style="text-align: center; color: #999;">No deductions</td>
+            </tr>
+            {% endfor %}
+            {% if payslip.leave_deductions > 0 %}
+            <tr>
+                <td>Leave Deductions</td>
+                <td class="amount">{{ payslip.leave_deductions|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            <tr class="summary-row">
+                <td>Total Deductions</td>
+                <td class="amount">{{ payslip.total_deductions|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <!-- Net Salary -->
+    <table class="salary-table">
+        <tbody>
+            <tr class="net-salary-row">
+                <td><strong>NET SALARY</strong></td>
+                <td class="amount"><strong>₹ {{ payslip.net_salary|floatformat:2 }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <!-- Note -->
+    <div class="note">
+        <strong>Note:</strong> This is a computer-generated payslip and does not require a signature. 
+        Please verify the details and report any discrepancies to the HR department within 7 days.
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>{{ company_name }} | Payroll Department</p>
+        <p>This document is confidential and intended solely for the use of the individual to whom it is addressed.</p>
+    </div>
+</body>
+</html>

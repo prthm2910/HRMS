@@ -20,27 +20,33 @@ URL configuration for config project.
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from rest_framework.permissions import AllowAny
 from django.conf import settings
 from django.conf.urls.static import static
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info("Initializing HRMS core URL routing hierarchy")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     # --- DOCUMENTATION (drf-spectacular) ---
     # 1. The Schema File (JSON/YAML)
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/', SpectacularAPIView.as_view(permission_classes=[AllowAny]), name='schema'),
     
     # 2. Swagger UI (The Interactive Docs)
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[AllowAny]), name='swagger-ui'),
     
     # 3. Redoc UI (The Clean Docs)
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema', permission_classes=[AllowAny]), name='redoc'),
     # --- APP URLS ---
     path('api/auth/', include('apps.users.urls')),
     path('api/organization/', include('apps.organization.urls')),
     path('api/leaves/', include('apps.leaves.urls')),
     path('api/holidays/', include('apps.holidays.urls')),
     path('api/projects/', include('apps.projects.urls')),
+    path('api/payroll/', include('apps.payroll.urls')),
 ]
 
 # Serve media files in development

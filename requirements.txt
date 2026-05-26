@@ -26,3 +26,7 @@ uritemplate==4.2.0
 urllib3==2.6.2
 pydantic==2.10.5
 google-generativeai==0.8.3
+django-phonenumber-field==8.0.0
+phonenumbers==8.13.52
+reportlab==4.4.9
+qrcode==8.2

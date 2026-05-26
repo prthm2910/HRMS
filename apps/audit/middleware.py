@@ -3,6 +3,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 # IF YOU USE STANDARD TOKENS: from rest_framework.authentication import TokenAuthentication
 
 from apps.base.utils import set_audit_data, clear_audit_data
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AuditMiddleware:
     def __init__(self, get_response):
@@ -33,14 +36,17 @@ class AuditMiddleware:
         # 3. Capture Details
         user_agent = request.META.get('HTTP_USER_AGENT', '')
         path = request.path
+        user_id = user.id if user and user.is_authenticated else 'Anonymous'
 
         # 4. Save to Thread for Signals
+        logger.debug(f"Audit tracking started | Path: {path} | User ID: {user_id}")
         set_audit_data(user, user_agent, path)
 
         response = self.get_response(request)
 
         # 5. Cleanup
         clear_audit_data()
+        logger.debug(f"Audit tracking completed | Path: {path}")
 
         return response
 

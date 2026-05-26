@@ -11,14 +11,18 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
-import sys
 from pathlib import Path
 import environ
+import logging
 from hrms.config.django import DJANGO_APPS, DJANGO_DEFAULT_MIDDLEWARE, DJANGO_CORE_TEMPLATES, DJANGO_AUTH_PASSWORD_VALIDATORS, LOCAL_MIDDLEWARE 
 from hrms.config.drf import DRF_REST_FRAMEWORK
 from hrms.config.third_party import THIRD_PARTY_APPS, SPECTACULAR_CONFIG
 from hrms.config.django import LOCAL_APPS
 from hrms.config.utils import get_db_config, get_simple_jwt_config
+from hrms.config.logging import LOGGING
+
+logger = logging.getLogger(__name__)
+logger.info("Starting HRMS core settings initialization")
 
 # ==============================================================================
 # 1. CORE CONFIGURATION
@@ -156,3 +160,36 @@ if not DEBUG:
 # ==============================================================================
 
 GEMINI_API_KEY = env('GOOGLE_API_KEY', default='')
+
+
+# ==============================================================================
+# 12. COMPANY INFORMATION (for payslips and documents)
+# ==============================================================================
+
+COMPANY_NAME = env('COMPANY_NAME', default='Your Company Name')
+COMPANY_ADDRESS = env('COMPANY_ADDRESS', default='Company Address')
+
+
+# ==============================================================================
+# 13. EMAIL CONFIGURATION
+# ==============================================================================
+
+# Email backend (for development, use console backend)
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+
+# SMTP settings (for production)
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@yourcompany.com')
+
+
+# ==============================================================================
+# 14. LOGGING CONFIGURATION
+# ==============================================================================
+
+LOGGING = LOGGING
+
+logger.info("HRMS core settings initialization completed")

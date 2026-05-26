@@ -4,6 +4,8 @@ THIRD_PARTY_APPS = [
     'corsheaders',                 # To allow Frontend access
     'django_filters',              # Advanced filtering
     'drf_spectacular',             # For API Schema and Docs
+    'phonenumber_field',           # Standardized phone numbers
+    'rest_framework_simplejwt.token_blacklist', # For blacklisting tokens (Logout)
 ]
 
 SPECTACULAR_CONFIG = {
@@ -11,4 +13,11 @@ SPECTACULAR_CONFIG = {
     'DESCRIPTION': 'Human Resource Management System API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'LeaveRequestStatus': 'apps.leaves.constants.LeaveRequestStatus',
+        'PayrollStatus': 'apps.payroll.constants.PayrollStatus',
+        'AIOperationStatus': 'apps.audit.constants.AIOperationLogStatus',
+        'EmploymentType': 'apps.organization.constants.EmploymentType',
+        'LeaveType': 'apps.leaves.constants.LeaveType',
+    },
 }

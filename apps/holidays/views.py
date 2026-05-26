@@ -1,20 +1,22 @@
-from rest_framework import viewsets, status
+import logging
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
-from apps.holidays.permissions import IsAdminOrReadOnly
-from apps.base.views import DeleteMixin
-from apps.holidays.models import Holiday
+from apps.base.views import DeleteMixin, AdminWriteFullViewSet
+from apps.holidays.models import Holiday, HolidayExtractionStatus
+from apps.holidays.filters import HolidayFilter
 from apps.holidays.serializers import (
     HolidaySerializer,
     HolidayListSerializer,
     BulkHolidayCreateSerializer
 )
 
+logger = logging.getLogger(__name__)
 
-class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
+class HolidayViewSet(DeleteMixin, AdminWriteFullViewSet):
     """
     ViewSet for managing holidays.
     
@@ -32,33 +34,18 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
     - POST /api/holidays/bulk-create/ - Create multiple holidays at once
     """
     
-    permission_classes = [IsAdminOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    
-    def get_queryset(self):
+    queryset = Holiday.objects.all().order_by('holiday_date')
+    serializer_class = HolidaySerializer
+    filterset_class = HolidayFilter
+    search_fields = ['name', 'description']
+    ordering_fields = ['holiday_date', 'name']
+
+    def get_standard_user_queryset(self, employee_profile):
         """
         Return active holidays only for regular users.
-        Admin can see all holidays including deleted ones.
         """
-        queryset = Holiday.objects.all()
-        
-        # Regular users only see active, non-deleted holidays
-        if not (self.request.user.is_staff or self.request.user.is_superuser):
-            queryset = queryset.filter(is_active=True, is_deleted=False)
-        
-        # Optional filtering by date range
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        region = self.request.query_params.get('region')
-        
-        if start_date:
-            queryset = queryset.filter(date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(date__lte=end_date)
-        if region:
-            queryset = queryset.filter(region=region)
-        
-        return queryset.order_by('date')
+        return self.queryset.filter(is_active=True, is_deleted=False)
     
     def get_serializer_class(self):
         """Use lightweight serializer for list view"""
@@ -113,6 +100,7 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
         Saves the image to MEDIA storage for audit trail.
         """
         if 'image' not in request.FILES:
+            logger.warning(f"OCR attempted without image | User ID: {request.user.id}")
             return Response(
                 {'error': 'No image file provided. Please upload an image.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -128,8 +116,9 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
         upload_record = HolidayUpload.objects.create(
             uploaded_by=request.user,
             image=image_file,
-            extraction_status='PENDING'
+            extraction_status=HolidayExtractionStatus.PENDING.value
         )
+        logger.info(f"Initiated holiday OCR process | Upload ID: {upload_record.id} | User ID: {request.user.id}")
         
         try:
             # Use AI service for OCR processing
@@ -163,12 +152,13 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
                 )
             
             # Check if extraction was successful
-            if result['status'] == 'SUCCESS':
+            if result['status'] == HolidayExtractionStatus.SUCCESS.value:
                 # Save extracted data to upload record
                 upload_record.extracted_data = result['extracted_holidays']
-                upload_record.extraction_status = 'SUCCESS'
+                upload_record.extraction_status = HolidayExtractionStatus.SUCCESS.value
                 upload_record.save()
                 
+                logger.info(f"Holiday OCR extraction successful | Upload ID: {upload_record.id} | Count: {result['total_count']}")
                 return Response({
                     'success': True,
                     'upload_id': str(upload_record.id),
@@ -182,10 +172,11 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
                 }, status=status.HTTP_200_OK)
             else:
                 # Extraction failed
-                upload_record.extraction_status = 'FAILED'
+                upload_record.extraction_status = HolidayExtractionStatus.FAILED.value
                 upload_record.error_message = result.get('error', 'Unknown error')
                 upload_record.save()
                 
+                logger.error(f"Holiday OCR extraction failed | Upload ID: {upload_record.id} | Error: {upload_record.error_message}")
                 return Response({
                     'error': 'Failed to process image',
                     'details': result.get('error'),
@@ -193,7 +184,7 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         except Exception as e:
-            upload_record.extraction_status = 'FAILED'
+            upload_record.extraction_status = HolidayExtractionStatus.FAILED.value
             upload_record.error_message = str(e)
             upload_record.save()
             
@@ -213,7 +204,7 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
         {
           "holidays": [
             {
-              "date": "2026-01-26",
+              "holiday_date": "2026-01-26",
               "name": "Republic Day",
               "description": "",
               "is_recurring": true,
@@ -233,6 +224,7 @@ class HolidayViewSet(DeleteMixin, viewsets.ModelViewSet):
           "skipped_holidays": [...]
         }
         """
+        logger.info(f"Executing bulk holiday creation | User ID: {request.user.id}")
         serializer = BulkHolidayCreateSerializer(data=request.data)
         
         if serializer.is_valid():
